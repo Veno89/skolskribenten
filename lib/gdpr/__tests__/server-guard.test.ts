@@ -24,7 +24,7 @@ describe("detectPotentialSensitiveContent", () => {
 
   it("flags capitalized words even at the start of a sentence", () => {
     const findings = detectPotentialSensitiveContent(
-      "Mohammed deltog aktivt under lektionen.",
+      "Vi pratade med Mohammed efter lunch.",
     );
 
     expect(findings).toEqual(
@@ -44,6 +44,14 @@ describe("detectPotentialSensitiveContent", () => {
 
     expect(findings).toEqual([]);
   });
+
+  it("does not flag Lärare as a name-like word on its own", () => {
+    const findings = detectPotentialSensitiveContent(
+      "Lärare hjälpte [Elev 1] under lektionen.",
+    );
+
+    expect(findings).toEqual([]);
+  });
 });
 
 describe("formatPotentialSensitiveContentMessage", () => {
@@ -57,5 +65,14 @@ describe("formatPotentialSensitiveContentMessage", () => {
     expect(message).toContain("telefonnummer");
     expect(message).not.toContain("Erik");
     expect(message).not.toContain("070-123 45 67");
+  });
+
+  it("no longer tells the user to manually add names", () => {
+    const message = formatPotentialSensitiveContentMessage([
+      { type: "capitalized_word", matches: ["Mohammed"] },
+    ]);
+
+    expect(message).toContain("Granska texten och försök igen.");
+    expect(message).not.toContain("Lägg till fler namn i listan");
   });
 });

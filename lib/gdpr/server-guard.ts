@@ -1,5 +1,5 @@
 import { ALL_SWEDISH_NAMES, escapeRegex, SWEDISH_PATTERNS } from "./patterns";
-import { collectUnmatchedCapitalizedWords } from "./scrubber";
+import { collectLikelyUnknownNameWords } from "./scrubber";
 
 const STRUCTURAL_MATCH_LIMIT = 3;
 const NAME_MATCH_LIMIT = 5;
@@ -50,9 +50,7 @@ export function detectPotentialSensitiveContent(
     findings.push({ type: "known_name", matches: knownNameMatches });
   }
 
-  const capitalizedMatches = collectUnmatchedCapitalizedWords(text, {
-    ignoreSentenceInitialWords: false,
-  }).slice(0, CAPITALIZED_MATCH_LIMIT);
+  const capitalizedMatches = collectLikelyUnknownNameWords(text).slice(0, CAPITALIZED_MATCH_LIMIT);
 
   if (capitalizedMatches.length > 0) {
     findings.push({ type: "capitalized_word", matches: capitalizedMatches });
@@ -87,7 +85,7 @@ export function formatPotentialSensitiveContentMessage(
 
   return `Texten verkar fortfarande innehålla personuppgifter (${labels.join(
     ", ",
-  )}). Lägg till fler namn i listan och försök igen.`;
+  )}). Granska texten och försök igen.`;
 }
 
 function getPatternMatches(text: string, pattern: RegExp, limit: number): string[] {

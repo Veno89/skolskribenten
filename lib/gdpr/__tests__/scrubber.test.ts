@@ -130,7 +130,15 @@ describe("GdprScrubber", () => {
   it("flags remaining capitalized words in unmatchedCapitalized", () => {
     const result = new GdprScrubber().scrub("Vi pratade med Mohammed efter lunch.");
 
-    expect(result.unmatchedCapitalized).toEqual(["Mohammed"]);
+    expect(result.scrubbedText).toBe("Vi pratade med [Elev 1] efter lunch.");
+    expect(result.unmatchedCapitalized).toEqual([]);
+  });
+
+  it("does not mistake Lärare for a person name while still scrubbing unknown names", () => {
+    const result = new GdprScrubber().scrub("Lärare pratade med Mohammed efter lunch.");
+
+    expect(result.scrubbedText).toBe("Lärare pratade med [Elev 1] efter lunch.");
+    expect(result.unmatchedCapitalized).toEqual([]);
   });
 
   it("does not flag known safe capitalized words (Måndag, Svenska, etc.)", () => {

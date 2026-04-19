@@ -19,43 +19,84 @@ interface CollectUnmatchedCapitalizedOptions {
 }
 
 const SAFE_CAPITALIZED_WORDS = new Set([
-  "Måndag",
-  "Tisdag",
-  "Onsdag",
-  "Torsdag",
-  "Fredag",
-  "Lördag",
-  "Söndag",
-  "Januari",
-  "Februari",
-  "Mars",
   "April",
-  "Maj",
-  "Juni",
-  "Juli",
   "Augusti",
-  "September",
-  "Oktober",
-  "November",
-  "December",
-  "Svenska",
-  "Matematik",
-  "Engelska",
-  "Historia",
+  "Biblioteket",
   "Biologi",
-  "Kemi",
-  "Fysik",
-  "Musik",
-  "Idrott",
-  "Bild",
-  "Slöjd",
-  "Teknik",
-  "Lgr",
-  "Skolverket",
-  "Unikum",
-  "Sverige",
-  "Stockholm",
+  "December",
+  "Den",
+  "Det",
+  "Efter",
+  "Eftersom",
   "Elev",
+  "Eleven",
+  "Eleverna",
+  "Engelska",
+  "Februari",
+  "Fredag",
+  "Fritids",
+  "Fysik",
+  "Gruppen",
+  "Han",
+  "Helklass",
+  "Historia",
+  "Hon",
+  "Idag",
+  "Idrott",
+  "Igår",
+  "Imorgon",
+  "Innan",
+  "Jag",
+  "Januari",
+  "Juli",
+  "Juni",
+  "Kemi",
+  "Klassen",
+  "Klassrummet",
+  "Kurator",
+  "Lektion",
+  "Lektionen",
+  "Lgr",
+  "Lärare",
+  "Läraren",
+  "Maj",
+  "Mars",
+  "Matematik",
+  "Matsalen",
+  "Mentor",
+  "Musik",
+  "November",
+  "Nu",
+  "När",
+  "Oktober",
+  "Onsdag",
+  "Personal",
+  "Rektor",
+  "Sedan",
+  "September",
+  "Skolan",
+  "Skolgården",
+  "Skolverket",
+  "Speciallärare",
+  "Specialpedagog",
+  "Stockholm",
+  "Svenska",
+  "Sverige",
+  "Söndag",
+  "Teknik",
+  "Tisdag",
+  "Torsdag",
+  "Under",
+  "Unikum",
+  "Vardnadshavare",
+  "Vårdnadshavare",
+  "Vi",
+  "Ågrupp",
+  "Årskurs",
+  "Ämne",
+  "Övrigt",
+  "Lördag",
+  "Måndag",
 ]);
 
 export class GdprScrubber {
@@ -90,22 +131,19 @@ export class GdprScrubber {
       return "[e-postadress]";
     });
 
-    const allNames = buildNameList(options.customNames);
+    processed = this.replaceDetectedNames(
+      processed,
+      buildNameList(options.customNames),
+      replacements,
+      replacedEntityKeys,
+    );
 
-    for (const name of allNames) {
-      const regex = new RegExp(`\\b${escapeRegex(name)}\\b`, "giu");
-      processed = processed.replace(regex, (match) => {
-        const key = normalizeEntityKey(match);
-        const placeholder = this.getPlaceholder(match);
-
-        if (!replacedEntityKeys.has(key)) {
-          replacedEntityKeys.add(key);
-          replacements.set(match, placeholder);
-        }
-
-        return placeholder;
-      });
-    }
+    processed = this.replaceDetectedNames(
+      processed,
+      collectLikelyUnknownNameWords(processed),
+      replacements,
+      replacedEntityKeys,
+    );
 
     return {
       scrubbedText: processed,
@@ -127,6 +165,32 @@ export class GdprScrubber {
     }
 
     return this.entityMap.get(key)!;
+  }
+
+  private replaceDetectedNames(
+    text: string,
+    names: string[],
+    replacements: Map<string, string>,
+    replacedEntityKeys: Set<string>,
+  ): string {
+    let processed = text;
+
+    for (const name of names) {
+      const regex = new RegExp(`\\b${escapeRegex(name)}\\b`, "giu");
+      processed = processed.replace(regex, (match) => {
+        const key = normalizeEntityKey(match);
+        const placeholder = this.getPlaceholder(match);
+
+        if (!replacedEntityKeys.has(key)) {
+          replacedEntityKeys.add(key);
+          replacements.set(match, placeholder);
+        }
+
+        return placeholder;
+      });
+    }
+
+    return processed;
   }
 }
 
@@ -154,20 +218,10 @@ export function collectUnmatchedCapitalizedWords(
   options: CollectUnmatchedCapitalizedOptions = {},
 ): string[] {
   const ignoreSentenceInitialWords = options.ignoreSentenceInitialWords ?? true;
-  const words = Array.from(
-    text.matchAll(/\b[A-ZÅÄÖ][a-zåäö]{2,}\b/g),
-    (match) => ({
-      word: match[0],
-      index: match.index ?? 0,
-    }),
-  );
+  const words = getCapitalizedWordMatches(text);
 
   const unmatched = words.filter(({ word, index }) => {
-    if (SAFE_CAPITALIZED_WORDS.has(word)) {
-      return false;
-    }
-
-    if (text[index - 1] === "[") {
+    if (isIgnoredCapitalizedWord(text, word, index)) {
       return false;
     }
 
@@ -179,6 +233,44 @@ export function collectUnmatchedCapitalizedWords(
   });
 
   return Array.from(new Set(unmatched.map(({ word }) => word)));
+}
+
+export function collectLikelyUnknownNameWords(text: string): string[] {
+  const groupedMatches = new Map<string, Array<{ index: number; word: string }>>();
+
+  for (const match of getCapitalizedWordMatches(text)) {
+    if (isIgnoredCapitalizedWord(text, match.word, match.index)) {
+      continue;
+    }
+
+    const key = normalizeEntityKey(match.word);
+    const matches = groupedMatches.get(key) ?? [];
+    matches.push(match);
+    groupedMatches.set(key, matches);
+  }
+
+  return Array.from(groupedMatches.values())
+    .filter(
+      (matches) =>
+        matches.length > 1 ||
+        matches.some(({ index }) => !isSentenceInitialWord(text, index)),
+    )
+    .map((matches) => matches[0].word);
+}
+
+function getCapitalizedWordMatches(text: string): Array<{ index: number; word: string }> {
+  return Array.from(text.matchAll(/\b\p{Lu}\p{Ll}{2,}\b/gu), (match) => ({
+    word: match[0],
+    index: match.index ?? 0,
+  }));
+}
+
+function isIgnoredCapitalizedWord(text: string, word: string, index: number): boolean {
+  if (SAFE_CAPITALIZED_WORDS.has(word)) {
+    return true;
+  }
+
+  return text[index - 1] === "[";
 }
 
 function isSentenceInitialWord(text: string, index: number): boolean {
