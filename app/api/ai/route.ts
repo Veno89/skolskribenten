@@ -67,7 +67,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Du behöver logga in för att fortsätta." }, { status: 401 });
   }
 
   const { allowed } = await checkRateLimit(supabase, user.id);
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         controller.close();
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Unknown generation error";
+          error instanceof Error ? error.message : "Okänt fel vid generering";
         console.error("[AI Route] Generation failed:", message);
         controller.error(error);
       }

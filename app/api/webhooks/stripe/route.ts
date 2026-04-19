@@ -10,7 +10,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const signature = req.headers.get("stripe-signature");
 
   if (!signature) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    return NextResponse.json({ error: "Ogiltig signatur." }, { status: 400 });
   }
 
   let event: Stripe.Event;
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       process.env.STRIPE_WEBHOOK_SECRET!,
     );
   } catch {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    return NextResponse.json({ error: "Ogiltig signatur." }, { status: 400 });
   }
 
   const supabase = createAdminClient();

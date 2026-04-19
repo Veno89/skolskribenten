@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 const steps = [
   {
     title: "Skriv",
-    description: "Klistra in dina råa anteckningar från lektionen utan att först städa bort namn.",
+    description: "Klistra in dina anteckningar från lektionen utan att först städa bort namn.",
   },
   {
     title: "GDPR-skölden skyddar",
@@ -33,7 +33,7 @@ const templates = [
 ] as const;
 
 const transparencyPoints = [
-  "Dina råa anteckningar scrubbas i webbläsaren innan de lämnar enheten.",
+  "Dina anteckningar skrubbas i webbläsaren innan de lämnar enheten.",
   "Vi sparar aldrig inmatad text eller AI-genererad text i databasen.",
   "Det enda som loggas är metadata som malltyp, tidpunkt och hur många uppgifter som skyddades.",
 ] as const;
@@ -78,7 +78,7 @@ export default function LandingPage(): JSX.Element {
               Skriv pedagogisk dokumentation på sekunder, inte timmar.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-muted-foreground md:text-xl">
-              Skolskribenten hjälper dig förvandla råa anteckningar till färdiga incidentrapporter,
+              Skolskribenten hjälper dig förvandla dina anteckningar till färdiga incidentrapporter,
               lärloggar och veckobrev, samtidigt som GDPR-skölden tar bort personuppgifter innan
               texten lämnar din enhet.
             </p>
@@ -99,7 +99,7 @@ export default function LandingPage(): JSX.Element {
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               "Vad är det? Klara mallar för incidentrapport, lärlogg och veckobrev.",
-              "Hur skyddar det eleverna? All scrub sker i webbläsaren före nätverkstrafik.",
+              "Hur skyddar det eleverna? All skrubbing sker i webbläsaren före nätverkstrafik.",
               "Vad kostar det? Gratisnivå först, därefter två tydliga Pro-val.",
             ].map((item) => (
               <div
