@@ -36,10 +36,10 @@ export function LegalPage({
           </Link>
           <span aria-hidden="true">•</span>
           <Link
-            href="mailto:kontakt@skolskribenten.com"
+            href="/kontakt"
             className="transition-colors hover:text-[var(--ss-neutral-900)]"
           >
-            kontakt@skolskribenten.com
+            Kontakt
           </Link>
         </div>
 

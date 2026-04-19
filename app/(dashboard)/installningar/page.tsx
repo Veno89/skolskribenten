@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
 import { updateSettingsAction } from "@/app/(dashboard)/installningar/actions";
+
+export const metadata: Metadata = {
+  title: "Inställningar",
+  description: "Anpassa skolnivå, ton och kontoinformation för dina AI-utkast.",
+};
 import { AuthNotice } from "@/components/auth/AuthNotice";
 import { AuthSubmitButton } from "@/components/auth/AuthSubmitButton";
-import { DashboardPageActions } from "@/components/dashboard/DashboardPageActions";
-import { MissingProfileState } from "@/components/dashboard/MissingProfileState";
 import { Input } from "@/components/ui/input";
 import {
   getNoticeFromSearchParams,
@@ -10,7 +14,11 @@ import {
 } from "@/lib/auth/redirects";
 import { loadDashboardProfile } from "@/lib/dashboard/load-dashboard-profile";
 import { cn } from "@/lib/utils";
-import { parseUserSettings } from "@/lib/validations/user-settings";
+import {
+  parseUserSettings,
+  SCHOOL_LEVEL_LABELS,
+  TONE_LABELS,
+} from "@/lib/validations/user-settings";
 
 const SCHOOL_LEVEL_OPTIONS = [
   {
@@ -53,27 +61,14 @@ const TONE_OPTIONS = [
   },
 ] as const;
 
-const SCHOOL_LEVEL_LABELS = {
-  "F-3": "F-3",
-  "4-6": "4-6",
-  "7-9": "7-9",
-} as const;
-
-const TONE_LABELS = {
-  formal: "Formell",
-  warm: "Varm",
-} as const;
-
 interface Props {
   searchParams?: AuthSearchParams;
 }
 
-export default async function InstallningarPage({ searchParams }: Props): Promise<JSX.Element> {
+export default async function InstallningarPage({ searchParams }: Props): Promise<JSX.Element | null> {
   const { profile, user } = await loadDashboardProfile({ nextPath: "/installningar" });
 
-  if (!profile) {
-    return <MissingProfileState />;
-  }
+  if (!profile) return null;
 
   const notice = getNoticeFromSearchParams(searchParams);
   const userSettings = parseUserSettings(profile.user_settings);
@@ -92,14 +87,6 @@ export default async function InstallningarPage({ searchParams }: Props): Promis
             Här styr du hur Skolskribenten formulerar utkasten för just ditt arbete. Vi sparar bara
             kontoinställningar som namn, skola och skrivpreferenser, aldrig rå elevdokumentation.
           </p>
-
-          <DashboardPageActions
-            className="mt-6"
-            links={[
-              { href: "/skrivstation", label: "Till skrivstationen" },
-              { href: "/konto", label: "Konto" },
-            ]}
-          />
 
           {notice ? (
             <div className="mt-6">

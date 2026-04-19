@@ -174,3 +174,7 @@ export const ALL_SWEDISH_NAMES = Array.from(
     ...COMMON_SWEDISH_NAMES_NEUTRAL,
   ]),
 );
+
+export function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

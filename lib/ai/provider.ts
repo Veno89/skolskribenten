@@ -12,7 +12,6 @@ export const PREFERRED_TONES = ["formal", "warm"] as const;
 export type TemplateType = (typeof TEMPLATE_TYPES)[number];
 export type SchoolLevel = (typeof SCHOOL_LEVELS)[number];
 export type PreferredTone = (typeof PREFERRED_TONES)[number];
-export type PromptTemplateType = Exclude<TemplateType, "custom">;
 
 export interface GenerateDocumentParams {
   templateType: TemplateType;

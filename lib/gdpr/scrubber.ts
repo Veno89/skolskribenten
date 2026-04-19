@@ -1,4 +1,4 @@
-import { ALL_SWEDISH_NAMES, SWEDISH_PATTERNS } from "./patterns";
+import { ALL_SWEDISH_NAMES, escapeRegex, SWEDISH_PATTERNS } from "./patterns";
 
 export interface ScrubberResult {
   scrubbedText: string;
@@ -197,8 +197,4 @@ function isSentenceInitialWord(text: string, index: number): boolean {
 
 function normalizeEntityKey(value: string): string {
   return value.toLocaleLowerCase("sv-SE");
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

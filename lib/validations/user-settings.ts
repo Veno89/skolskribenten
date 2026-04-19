@@ -11,6 +11,17 @@ function emptyStringToUndefined(value: unknown): unknown {
   return trimmed === "" ? undefined : trimmed;
 }
 
+export const SCHOOL_LEVEL_LABELS = {
+  "F-3": "F-3",
+  "4-6": "4-6",
+  "7-9": "7-9",
+} as const;
+
+export const TONE_LABELS = {
+  formal: "Formell ton",
+  warm: "Varm ton",
+} as const;
+
 export const UserSettingsSchema = z.object({
   schoolLevel: z.enum(SCHOOL_LEVELS).optional(),
   preferredTone: z.enum(PREFERRED_TONES).optional(),

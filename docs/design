@@ -3,6 +3,21 @@
 
 ---
 
+## CURRENT IMPLEMENTATION STATUS
+
+This document is still the architectural source of truth, but it no longer maps 1:1 to the live repo in every detail. Use it together with `docs/roadmap`:
+
+- Built now:
+  auth flow, protected dashboard, drafting station, settings, legal pages, Supabase schema, Claude integration, polished output rendering, local draft autosave, contact/about/FAQ pages, and the under-construction `lektionsplanering` route.
+- Newly added after the original spec:
+  explicit `Unikum` template option, template-specific example text, and local browser draft persistence.
+- Still planned or actively evolving:
+  Stripe end-to-end hardening, further UI polish from teacher testing, handwritten note import, and later roadmap items listed in `docs/roadmap`.
+
+When the design doc and the live app differ, prefer the live code for current behavior and `docs/roadmap` for upcoming work.
+
+---
+
 > **HOW TO USE THIS DOCUMENT**
 > Paste Phases 0–5 into your AI coding agent (Cursor, Claude Code, Copilot Workspace, etc.) at the start of a new session. The agent should work through each phase sequentially. Do not skip phases. Each phase ends with a defined checkpoint before the next begins.
 >

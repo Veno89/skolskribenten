@@ -1,25 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { DraftingHeader } from "@/components/drafting/DraftingHeader";
 import { OutputPanel } from "@/components/drafting/OutputPanel";
 import { GdprNameInput } from "@/components/gdpr/GdprNameInput";
 import { Button } from "@/components/ui/button";
 import { useDocumentGeneration } from "@/hooks/useDocumentGeneration";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import {
+  FREE_TRANSFORM_LIMIT,
+  hasExceededFreeTransformLimit,
+  isActivePro,
+} from "@/lib/billing/entitlements";
 import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
-import { parseUserSettings } from "@/lib/validations/user-settings";
+import {
+  parseUserSettings,
+  SCHOOL_LEVEL_LABELS,
+  TONE_LABELS,
+} from "@/lib/validations/user-settings";
 import type { Profile } from "@/types";
-
-const SCHOOL_LEVEL_LABELS = {
-  "F-3": "F-3",
-  "4-6": "4-6",
-  "7-9": "7-9",
-} as const;
-
-const TONE_LABELS = {
-  formal: "Formell ton",
-  warm: "Varm ton",
-} as const;
 
 interface Props {
   userProfile: Profile;
@@ -53,6 +52,8 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
     userSettings.preferredTone ? TONE_LABELS[userSettings.preferredTone] : null,
   ].filter((value): value is string => Boolean(value));
   const selectedTemplateInfo = TEMPLATE_DETAILS[selectedTemplate];
+  const isPro = isActivePro(userProfile);
+  const quotaExceeded = hasExceededFreeTransformLimit(userProfile);
 
   const handleTemplateChange = (nextTemplate: typeof selectedTemplate) => {
     if (switchTemplate(nextTemplate)) {
@@ -143,14 +144,31 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
             </div>
           ) : null}
 
+          {quotaExceeded ? (
+            <div className="border-t border-[var(--ss-accent)] bg-[var(--ss-accent-soft)] px-4 py-3 text-sm leading-7 text-[var(--ss-neutral-900)]">
+              Du har använt dina {FREE_TRANSFORM_LIMIT} gratis omvandlingar den här månaden.{" "}
+              <Link
+                href="/konto"
+                className="font-medium text-[var(--ss-primary)] underline hover:no-underline"
+              >
+                Uppgradera till Pro
+              </Link>{" "}
+              för att fortsätta.
+            </div>
+          ) : null}
+
           <div className="border-t border-[var(--ss-neutral-100)] bg-white p-4">
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={isLoading || !rawInput.trim()}
+              disabled={isLoading || !rawInput.trim() || quotaExceeded}
               className="w-full rounded-2xl bg-[var(--ss-primary)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isLoading ? "Genererar..." : "Generera dokument →"}
+              {isLoading
+                ? "Genererar..."
+                : quotaExceeded
+                  ? "Gratisgräns nådd"
+                  : "Generera dokument →"}
             </button>
           </div>
         </div>

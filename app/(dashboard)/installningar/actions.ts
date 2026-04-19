@@ -5,14 +5,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { buildPath } from "@/lib/auth/redirects";
 import { createClient } from "@/lib/supabase/server";
+import { getFirstIssue } from "@/lib/validations/helpers";
 import {
   UpdateProfileSettingsSchema,
   buildUserSettings,
 } from "@/lib/validations/user-settings";
-
-function getFirstIssue(error: z.ZodError<unknown>): string | undefined {
-  return error.issues[0]?.message;
-}
 
 export async function updateSettingsAction(formData: FormData): Promise<void> {
   const supabase = createClient();
@@ -34,7 +31,7 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
   if (!parsed.success) {
     redirect(
       buildPath("/installningar", {
-        error: getFirstIssue(parsed.error) ?? "Kontrollera inställningarna och försök igen.",
+        error: getFirstIssue(parsed.error),
       }),
     );
   }

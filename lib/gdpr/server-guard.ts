@@ -1,4 +1,4 @@
-import { ALL_SWEDISH_NAMES, SWEDISH_PATTERNS } from "./patterns";
+import { ALL_SWEDISH_NAMES, escapeRegex, SWEDISH_PATTERNS } from "./patterns";
 import { collectUnmatchedCapitalizedWords } from "./scrubber";
 
 const STRUCTURAL_MATCH_LIMIT = 3;
@@ -124,8 +124,4 @@ function getKnownNameMatches(text: string, limit: number): string[] {
   }
 
   return matches;
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

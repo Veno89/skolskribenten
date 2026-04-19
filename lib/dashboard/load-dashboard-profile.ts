@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types";
@@ -14,9 +15,9 @@ interface DashboardProfileResult {
   };
 }
 
-export async function loadDashboardProfile(
+export const loadDashboardProfile = cache(async (
   options: LoadDashboardProfileOptions = {},
-): Promise<DashboardProfileResult> {
+): Promise<DashboardProfileResult> => {
   const supabase = createClient();
   const {
     data: { user },
@@ -39,4 +40,4 @@ export async function loadDashboardProfile(
       id: user.id,
     },
   };
-}
+});

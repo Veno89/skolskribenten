@@ -3,7 +3,7 @@ import {
   DOCUMENT_WRITING_RULES,
   SWEDISH_SCHOOL_CONTEXT,
 } from "@/lib/ai/knowledge";
-import type { PromptTemplateType, TemplateType } from "@/lib/ai/provider";
+import type { TemplateType } from "@/lib/ai/provider";
 import type { UserSettings } from "@/lib/validations/user-settings";
 
 export const BASE_SYSTEM_PROMPT = `
@@ -22,7 +22,7 @@ KRITISKA REGLER:
 - Outputen ska vara redo att kopiera direkt till ett officiellt dokument
 `.trim();
 
-export const TEMPLATE_PROMPTS: Record<PromptTemplateType, string> = {
+export const TEMPLATE_PROMPTS: Record<TemplateType, string> = {
   incidentrapport: `
 ${BASE_SYSTEM_PROMPT}
 
@@ -112,6 +112,26 @@ SPRÅKLIGA RIKTLINJER:
 - Undvik onödigt pedagogiskt fackspråk
 - Skriv så att texten går att skicka nästan direkt efter en snabb genomläsning
 `.trim(),
+
+  custom: `
+${BASE_SYSTEM_PROMPT}
+
+MALL: EGET DOKUMENT
+
+FORMATERING:
+- Formatera texten så att det matchar systemets output-renderare.
+- Använd EXAKT dessa strukturer:
+  Rubriker: Börja raden med ## (för underrubriker ###)
+  Viktiga sektioner: Omslut med ** på egen rad, t.ex. **Bakgrund**
+  Fältetiketter: Skriv på egen rad som "Värde: Information"
+  Listor: Använd - eller * i början av raden
+  Citat: Börja raden med >
+- Skriv ALDRIG avdelare (---) eller markdown-tabeller.
+
+SPRÅKLIGA RIKTLINJER:
+- Håll en professionell, saklig och tydlig ton anpassad för dokumentation i skolmiljö.
+- Följ alltid beställningens detaljerade avsikter (skrubbad input).
+`.trim(),
 };
 
 const SCHOOL_LEVEL_INSTRUCTIONS: Record<NonNullable<UserSettings["schoolLevel"]>, string> = {
@@ -151,6 +171,5 @@ export function getSystemPrompt(
   templateType: TemplateType,
   options?: { userSettings?: UserSettings },
 ): string {
-  const basePrompt = templateType === "custom" ? BASE_SYSTEM_PROMPT : TEMPLATE_PROMPTS[templateType];
-  return `${basePrompt}${buildSettingsSection(options?.userSettings)}`;
+  return `${TEMPLATE_PROMPTS[templateType]}${buildSettingsSection(options?.userSettings)}`;
 }

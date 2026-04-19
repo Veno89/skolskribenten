@@ -1,7 +1,6 @@
 "use client";
 
 import { startTransition, useState } from "react";
-import { DashboardPageActions } from "@/components/dashboard/DashboardPageActions";
 import { Button } from "@/components/ui/button";
 import {
   FREE_TRANSFORM_LIMIT,
@@ -94,14 +93,6 @@ export function KontoClient({ profile, paymentStatus }: Props): JSX.Element {
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[var(--ss-neutral-900)]">
           Ditt abonnemang i klartext
         </h1>
-
-        <DashboardPageActions
-          className="mt-6"
-          links={[
-            { href: "/skrivstation", label: "Till skrivstationen" },
-            { href: "/installningar", label: "Inställningar" },
-          ]}
-        />
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <div className="rounded-[1.5rem] bg-[var(--ss-neutral-50)] p-5">

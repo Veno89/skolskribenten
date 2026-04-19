@@ -1,16 +1,16 @@
-import { DashboardPageActions } from "@/components/dashboard/DashboardPageActions";
-import { MissingProfileState } from "@/components/dashboard/MissingProfileState";
+
+
+export const metadata: Metadata = {
+  title: "Lektionsplanering",
+  description: "Kommande Pro-modul för att planera lektioner med AI-stöd.",
+};
+import type { Metadata } from "next";
 import { isActivePro } from "@/lib/billing/entitlements";
 import { loadDashboardProfile } from "@/lib/dashboard/load-dashboard-profile";
 
 export default async function LektionsplaneringPage(): Promise<JSX.Element> {
   const { profile } = await loadDashboardProfile({ nextPath: "/lektionsplanering" });
-
-  if (!profile) {
-    return <MissingProfileState />;
-  }
-
-  const isPro = isActivePro(profile);
+  const isPro = isActivePro(profile!);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-16 lg:px-8">
@@ -26,15 +26,6 @@ export default async function LektionsplaneringPage(): Promise<JSX.Element> {
           differentiering och nästa steg. Vi håller den avgränsad så att den blir användbar på
           riktigt, inte bara ännu en generisk AI-ruta.
         </p>
-
-        <DashboardPageActions
-          className="mt-6"
-          links={[
-            { href: "/skrivstation", label: "Till skrivstationen" },
-            { href: "/installningar", label: "Inställningar" },
-            { href: "/konto", label: "Konto" },
-          ]}
-        />
 
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
           <article className="rounded-[1.5rem] bg-[var(--ss-primary-light)] p-6">

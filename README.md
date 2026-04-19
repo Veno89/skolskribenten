@@ -13,6 +13,7 @@ The core product promise is privacy by design:
 Skolskribenten helps teachers generate:
 - incident reports
 - learning logs
+- Unikum-ready documentation
 - weekly letters
 - custom structured drafts
 
@@ -21,9 +22,13 @@ The app includes:
 - protected dashboard routes
 - a client-side GDPR scrubber for Swedish names and common PII
 - support for extra manually added names before generation
+- template-specific examples in the drafting station
+- local draft autosave in the browser
 - per-user usage tracking and free-tier limits
 - Stripe checkout for monthly Pro and 30-day passes
 - teacher preferences for school level and tone
+- contact, about, and FAQ pages for test users
+- a `lektionsplanering` dashboard tab marked as under construction
 
 ## Tech Stack
 
@@ -55,8 +60,12 @@ This is the product's most important architectural rule.
 - `/logga-in` Sign in
 - `/aterstall` Password reset
 - `/skrivstation` Protected drafting station
+- `/lektionsplanering` Protected placeholder for the upcoming planning module
 - `/installningar` Protected teacher preferences
 - `/konto` Protected billing and subscription page
+- `/om-oss` About page
+- `/vanliga-fragor` FAQ page
+- `/kontakt` Contact page with an on-page mail form
 - `/api/ai` AI generation endpoint
 - `/api/stripe/checkout` Stripe checkout session endpoint
 - `/api/webhooks/stripe` Stripe webhook handler
@@ -90,8 +99,9 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 ```bash
 pnpm install
-pnpm build
+pnpm typecheck
 pnpm test
+pnpm build
 pnpm dev
 ```
 
@@ -107,20 +117,25 @@ The project currently expects at least:
 - RLS policies
 - the monthly reset function/job
 - the one-time-pass expiry function/job
+- migration `007_add_unikum_template_type.sql` for the new `unikum` template in usage analytics
 
 ## Current Product Status
 
 Implemented:
-- landing page
+- landing page and legal pages
 - auth flow
 - protected dashboard
-- drafting station
+- drafting station with template-specific examples
+- local draft autosave
+- Unikum as a distinct template option
 - account and billing UI
 - settings and prompt personalization
+- contact, about, FAQ, and upcoming planning pages
 - hosted Supabase schema setup
 
-Next likely milestone:
-- add the production Anthropic key and test the full generation flow end to end
+Next likely milestones:
+- finish Stripe end-to-end test mode
+- continue polishing output structure based on real teacher feedback
 
 ## Repository
 

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { buildPath, sanitizeNextPath } from "@/lib/auth/redirects";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/config";
 
-const PROTECTED_ROUTES = ["/skrivstation", "/installningar", "/konto"] as const;
+const PROTECTED_ROUTES = ["/skrivstation", "/lektionsplanering", "/installningar", "/konto"] as const;
 const AUTH_ROUTES = ["/logga-in", "/registrera"] as const;
 
 function applySecurityHeaders(response: NextResponse): NextResponse {

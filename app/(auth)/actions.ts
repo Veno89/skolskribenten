@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/redirects";
 import { getAppUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getFirstIssue } from "@/lib/validations/helpers";
 
 const EmailSchema = z.string().trim().email("Ange en giltig e-postadress.");
 const PasswordSchema = z
@@ -57,10 +58,6 @@ function getValue(formData: FormData, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function getFirstIssue(result: { error: z.ZodError<unknown> }): string {
-  return result.error.issues[0]?.message ?? "Kontrollera formuläret och försök igen.";
-}
-
 function toFriendlyAuthError(message: string): string {
   const normalized = message.toLowerCase();
 
@@ -104,7 +101,7 @@ export async function loginAction(formData: FormData): Promise<never> {
   const next = sanitizeNextPath(getValue(formData, "next"), DEFAULT_POST_AUTH_REDIRECT);
 
   if (!parsed.success) {
-    redirectWithMessage("/logga-in", { error: getFirstIssue(parsed), next });
+    redirectWithMessage("/logga-in", { error: getFirstIssue(parsed.error), next });
   }
 
   const supabase = createClient();
@@ -134,7 +131,7 @@ export async function registerAction(formData: FormData): Promise<never> {
   });
 
   if (!parsed.success) {
-    redirectWithMessage("/registrera", { error: getFirstIssue(parsed), next });
+    redirectWithMessage("/registrera", { error: getFirstIssue(parsed.error), next });
   }
 
   const supabase = createClient();
@@ -172,7 +169,7 @@ export async function requestPasswordResetAction(formData: FormData): Promise<ne
   });
 
   if (!parsed.success) {
-    redirectWithMessage("/aterstall", { error: getFirstIssue(parsed) });
+    redirectWithMessage("/aterstall", { error: getFirstIssue(parsed.error) });
   }
 
   const supabase = createClient();
@@ -200,7 +197,7 @@ export async function updatePasswordAction(formData: FormData): Promise<never> {
 
   if (!parsed.success) {
     redirectWithMessage("/aterstall", {
-      error: getFirstIssue(parsed),
+      error: getFirstIssue(parsed.error),
       mode: "update",
       next,
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DocumentRenderer } from "@/components/drafting/DocumentRenderer";
 import { Button } from "@/components/ui/button";
 import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
@@ -13,6 +13,33 @@ interface Props {
   templateType: TemplateType;
 }
 
+/**
+ * Copies the rendered document content to the clipboard as both HTML and
+ * plain text. When pasted into Word, Google Docs, or Unikum the teacher
+ * gets formatted text (bold, headings, lists) rather than raw markdown.
+ *
+ * Falls back to `navigator.clipboard.writeText` for browsers that do not
+ * support the `ClipboardItem` API (Safari < 13.1 etc.).
+ */
+async function copyRenderedContent(element: HTMLElement, rawText: string): Promise<void> {
+  const html = element.innerHTML;
+
+  if (typeof ClipboardItem !== "undefined") {
+    const htmlBlob = new Blob([html], { type: "text/html" });
+    const textBlob = new Blob([rawText], { type: "text/plain" });
+    const item = new ClipboardItem({
+      "text/html": htmlBlob,
+      "text/plain": textBlob,
+    });
+
+    await navigator.clipboard.write([item]);
+    return;
+  }
+
+  // Fallback: plaintext only
+  await navigator.clipboard.writeText(rawText);
+}
+
 export function OutputPanel({
   completion,
   isLoading,
@@ -20,11 +47,17 @@ export function OutputPanel({
   templateType,
 }: Props): JSX.Element {
   const [copyStatus, setCopyStatus] = useState<"idle" | "done" | "failed">("idle");
+  const renderedRef = useRef<HTMLDivElement>(null);
   const templateInfo = TEMPLATE_DETAILS[templateType];
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(completion);
+      if (renderedRef.current) {
+        await copyRenderedContent(renderedRef.current, completion);
+      } else {
+        await navigator.clipboard.writeText(completion);
+      }
+
       setCopyStatus("done");
       window.setTimeout(() => setCopyStatus("idle"), 1800);
     } catch {
@@ -90,7 +123,11 @@ export function OutputPanel({
           </div>
         ) : null}
 
-        {completion ? <DocumentRenderer content={completion} templateType={templateType} /> : null}
+        {completion ? (
+          <div ref={renderedRef}>
+            <DocumentRenderer content={completion} templateType={templateType} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

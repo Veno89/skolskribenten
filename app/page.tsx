@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { MobileNav } from "@/components/shared/MobileNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
 
 const steps = [
   {
@@ -13,27 +15,31 @@ const steps = [
   },
   {
     title: "Färdigt dokument",
-    description: "Få en text som går att kopiera direkt till incidentrapport, lärlogg eller veckobrev.",
+    description: "Få en text som går att kopiera direkt till incidentrapport, Unikum, lärlogg eller veckobrev.",
   },
 ] as const;
 
 const templates = [
   {
-    title: "Incidentrapport",
-    description: "Objektiv, händelsebaserad dokumentation för DFrespons-liknande arbetsflöden.",
+    title: TEMPLATE_DETAILS.incidentrapport.label,
+    description: TEMPLATE_DETAILS.incidentrapport.cardDescription,
   },
   {
-    title: "Lärlogg",
-    description: "Styrkebaserad pedagogisk dokumentation kopplad till Lgr22 och nästa steg.",
+    title: TEMPLATE_DETAILS.larlogg.label,
+    description: TEMPLATE_DETAILS.larlogg.cardDescription,
   },
   {
-    title: "Veckobrev",
-    description: "Tydlig, varm kommunikation till vårdnadshavare utan onödig pedagogisk jargong.",
+    title: TEMPLATE_DETAILS.unikum.label,
+    description: TEMPLATE_DETAILS.unikum.cardDescription,
+  },
+  {
+    title: TEMPLATE_DETAILS.veckobrev.label,
+    description: TEMPLATE_DETAILS.veckobrev.cardDescription,
   },
 ] as const;
 
 const transparencyPoints = [
-  "Dina anteckningar skrubbas i webbläsaren innan de lämnar enheten.",
+  "Dina anteckningar scrubbas i webbläsaren innan de lämnar enheten.",
   "Vi sparar aldrig inmatad text eller AI-genererad text i databasen.",
   "Det enda som loggas är metadata som malltyp, tidpunkt och hur många uppgifter som skyddades.",
 ] as const;
@@ -56,12 +62,27 @@ export default function LandingPage(): JSX.Element {
           </div>
         </div>
         <nav className="flex items-center gap-3">
+          <div className="hidden items-center gap-4 lg:flex">
+            <Link href="/om-oss" className="text-sm text-muted-foreground transition-colors hover:text-[var(--ss-neutral-900)]">
+              Om oss
+            </Link>
+            <Link
+              href="/vanliga-fragor"
+              className="text-sm text-muted-foreground transition-colors hover:text-[var(--ss-neutral-900)]"
+            >
+              Vanliga frågor
+            </Link>
+            <Link href="/kontakt" className="text-sm text-muted-foreground transition-colors hover:text-[var(--ss-neutral-900)]">
+              Kontakt
+            </Link>
+          </div>
           <Button asChild variant="ghost" className="hidden sm:inline-flex">
             <Link href="/logga-in">Logga in</Link>
           </Button>
-          <Button asChild className="rounded-full px-6">
+          <Button asChild className="hidden rounded-full px-6 sm:inline-flex">
             <Link href="/registrera">Prova gratis</Link>
           </Button>
+          <MobileNav />
         </nav>
       </header>
 
@@ -79,8 +100,8 @@ export default function LandingPage(): JSX.Element {
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-muted-foreground md:text-xl">
               Skolskribenten hjälper dig förvandla dina anteckningar till färdiga incidentrapporter,
-              lärloggar och veckobrev, samtidigt som GDPR-skölden tar bort personuppgifter innan
-              texten lämnar din enhet.
+              lärloggar, Unikum-utkast och veckobrev, samtidigt som GDPR-skölden tar bort
+              personuppgifter innan texten lämnar din enhet.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -98,8 +119,8 @@ export default function LandingPage(): JSX.Element {
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              "Vad är det? Klara mallar för incidentrapport, lärlogg och veckobrev.",
-              "Hur skyddar det eleverna? All skrubbing sker i webbläsaren före nätverkstrafik.",
+              "Vad är det? Klara mallar för incidentrapport, lärlogg, Unikum och veckobrev.",
+              "Hur skyddar det eleverna? All scrubbing sker i webbläsaren före nätverkstrafik.",
               "Vad kostar det? Gratisnivå först, därefter två tydliga Pro-val.",
             ].map((item) => (
               <div
@@ -124,13 +145,12 @@ export default function LandingPage(): JSX.Element {
             <div className="rounded-[1.5rem] border border-[var(--ss-neutral-100)] bg-[var(--ss-neutral-50)] p-5">
               <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Dina anteckningar</p>
               <div className="mt-4 rounded-[1.25rem] border border-dashed border-[var(--ss-primary)]/30 bg-white p-4 text-sm leading-7 text-[var(--ss-neutral-800)]">
-                Eleven hade svårt att sitta still under matematiklektionen och störde de andra
-                eleverna tre gånger. Vi pratade efteråt och kom överens om att eleven ska sitta
-                närmast tavlan nästa vecka.
+                Clara drog Anna i håret under mattelektionen. Jag avbröt direkt, pratade med båda
+                eleverna och följde upp händelsen med mentor efter lektionen.
               </div>
               <div className="mt-5 flex items-center gap-2">
                 <span className="rounded-full bg-[var(--ss-primary)] px-3 py-1 text-xs font-medium text-white">
-                  Lärlogg
+                  Incidentrapport
                 </span>
                 <span className="rounded-full bg-[var(--ss-accent-soft)] px-3 py-1 text-xs font-medium text-[var(--ss-neutral-900)]">
                   2 uppgifter skyddade
@@ -140,9 +160,9 @@ export default function LandingPage(): JSX.Element {
             <div className="rounded-[1.5rem] bg-[var(--ss-neutral-900)] p-5 text-white shadow-xl shadow-[rgba(26,25,23,0.24)]">
               <p className="text-xs uppercase tracking-[0.24em] text-white/60">Färdigt dokument</p>
               <p className="mt-4 text-sm leading-7 text-white/90">
-                [Elev 1] visade behov av extra struktur under matematiklektionen. Genom samtal efter
-                lektionen identifierades en konkret anpassning: en placering närmare tavlan under
-                kommande vecka för att stödja fokus och arbetsro.
+                Händelseförlopp: Under matematiklektionen drog [Elev 1] [Elev 2] i håret och
+                uttryckte sig grovt kränkande. Omedelbara åtgärder: Situationen avbröts direkt och
+                båda eleverna togs åt sidan för en första genomgång.
               </p>
             </div>
           </div>
@@ -187,8 +207,8 @@ export default function LandingPage(): JSX.Element {
             Du ska förstå exakt vad som skyddas och vad som aldrig lagras.
           </h2>
           <p className="text-base leading-8 text-muted-foreground">
-            Förtroende är själva produkten. Därför förklarar Skolskribenten i klartext vad som händer
-            med elevuppgifter innan du klickar på Generera.
+            Förtroende är själva produkten. Därför förklarar Skolskribenten i klartext vad som
+            händer med elevuppgifter innan du klickar på Generera.
           </p>
         </div>
         <div className="grid gap-4">
@@ -207,10 +227,10 @@ export default function LandingPage(): JSX.Element {
         <div className="flex flex-col gap-3">
           <p className="text-sm uppercase tracking-[0.28em] text-[var(--ss-primary)]">Mallar</p>
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-            Tre dokumenttyper som täcker de vanligaste behoven i vardagen
+            Fyra dokumenttyper som täcker de vanligaste behoven i vardagen
           </h2>
         </div>
-        <div className="mt-8 grid gap-5 lg:grid-cols-3">
+        <div className="mt-8 grid gap-5 lg:grid-cols-4">
           {templates.map((template) => (
             <article key={template.title} className="ss-card p-7">
               <div className="inline-flex rounded-full bg-[var(--ss-primary-light)] px-3 py-1 text-xs font-medium text-[var(--ss-primary-dark)]">
@@ -256,9 +276,7 @@ export default function LandingPage(): JSX.Element {
                 <h3 className="mt-4 text-2xl font-semibold">
                   30-dagarskort — Obegränsade omvandlingar i 30 dagar, 49 kr
                 </h3>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                  Förnyas inte automatiskt.
-                </p>
+                <p className="mt-3 text-sm leading-7 text-muted-foreground">Förnyas inte automatiskt.</p>
                 <Button asChild variant="secondary" className="mt-8 rounded-full px-6">
                   <Link href="/konto">Välj 30-dagarskort</Link>
                 </Button>
@@ -284,10 +302,16 @@ export default function LandingPage(): JSX.Element {
             >
               Användarvillkor
             </Link>
+            <Link href="/om-oss" className="transition-colors hover:text-[var(--ss-neutral-900)]">
+              Om oss
+            </Link>
             <Link
-              href="mailto:kontakt@skolskribenten.com"
+              href="/vanliga-fragor"
               className="transition-colors hover:text-[var(--ss-neutral-900)]"
             >
+              Vanliga frågor
+            </Link>
+            <Link href="/kontakt" className="transition-colors hover:text-[var(--ss-neutral-900)]">
               Kontakt
             </Link>
           </div>
