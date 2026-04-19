@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 36 20% 97%;
+    --foreground: 30 9% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 30 9% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 9% 10%;
+    --primary: 205 38% 47%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 27% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 40 14% 93%;
+    --muted-foreground: 28 4% 46%;
+    --accent: 25 69% 70%;
+    --accent-foreground: 30 9% 10%;
+    --destructive: 6 61% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 10% 84%;
+    --input: 30 10% 84%;
+    --ring: 205 38% 47%;
+    --radius: 0.875rem;
+    --ss-primary: #4a7fa5;
+    --ss-primary-light: #e8f1f8;
+    --ss-secondary: #6bab90;
+    --ss-secondary-light: #eaf4ee;
+    --ss-accent: #e8a87c;
+    --ss-danger: #c0392b;
+    --ss-neutral-50: #f8f7f5;
+    --ss-neutral-100: #eeecea;
+    --ss-neutral-200: #d5d3d0;
+    --ss-neutral-800: #2c2b29;
+    --ss-neutral-900: #1a1917;
+    --ss-primary-dark: #305f80;
+    --ss-accent-soft: #f5dfcf;
+    --ss-surface: rgba(255, 255, 255, 0.82);
+    --font-sans: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+    --font-display: "Iowan Old Style", "Palatino Linotype", serif;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    background-image:
+      radial-gradient(circle at top left, rgba(232, 241, 248, 0.92), transparent 38%),
+      radial-gradient(circle at bottom right, rgba(234, 244, 238, 0.85), transparent 32%);
+  }
+
+  ::selection {
+    background: rgba(74, 127, 165, 0.2);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .ss-surface {
+    background: var(--ss-surface);
+    backdrop-filter: blur(18px);
+  }
+
+  .ss-card {
+    @apply rounded-[1.75rem] border border-white/60 bg-white/90 shadow-[0_20px_70px_-30px_rgba(26,25,23,0.35)];
+  }
+
+  .ss-grid {
+    background-image:
+      linear-gradient(to right, rgba(74, 127, 165, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(74, 127, 165, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}

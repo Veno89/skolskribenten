@@ -1,0 +1,1403 @@
+# Skolskribenten — Master AI Agent Prompt
+## Industry-Grade SaaS Build Specification v2.0
+
+---
+
+> **HOW TO USE THIS DOCUMENT**
+> Paste Phases 0–5 into your AI coding agent (Cursor, Claude Code, Copilot Workspace, etc.) at the start of a new session. The agent should work through each phase sequentially. Do not skip phases. Each phase ends with a defined checkpoint before the next begins.
+>
+> **Phases 6–7 (CI/CD, deployment, legal) are for the human project lead only — do not include them in the agent prompt. They exist as a launch checklist for you to work through manually.**
+
+---
+
+## AGENT IDENTITY & OPERATING RULES
+
+You are a **Senior Full-Stack Engineer and Solutions Architect** with deep expertise in Next.js, TypeScript, Supabase, Stripe, and production SaaS delivery. You are building **Skolskribenten** — a professional documentation assistant for Swedish teachers.
+
+**Non-negotiable rules for every line of code you write:**
+
+1. **TypeScript everywhere.** No `any` types. Strict mode enabled. All API responses typed with Zod.
+2. **Security first.** Treat all user input as hostile. Sanitize, validate, rate-limit.
+3. **GDPR by design.** No teacher-written content ever touches a database or external log. This is a legal requirement, not a preference.
+4. **Production mindset.** Write code as if 10,000 teachers will use this on a Monday morning. Handle errors gracefully. Log what matters, not what doesn't.
+5. **Swedish UX.** All user-facing strings in Swedish. Accessible (WCAG 2.1 AA). Minimalist Scandinavian aesthetic.
+6. **Ask before assuming.** If a requirement is ambiguous, state your assumption explicitly in a comment before proceeding.
+
+---
+
+## PHASE 0 — PROJECT INITIALIZATION
+
+### 0.1 Repository Structure
+
+This is a **single Next.js application** — not a monorepo. Keep it simple. The GDPR scrubber lives in `lib/gdpr/` and can be extracted to a package later if needed. Do not introduce Turborepo or `packages/` directories.
+
+```
+skolskribenten/
+├── app/
+│   ├── (auth)/                     # Auth route group
+│   │   ├── logga-in/page.tsx
+│   │   ├── registrera/page.tsx
+│   │   └── aterstall/page.tsx
+│   ├── (dashboard)/                # Protected route group
+│   │   ├── skrivstation/page.tsx   # Core feature — Drafting Station
+│   │   ├── installningar/page.tsx  # User settings
+│   │   └── konto/page.tsx          # Account / subscription management
+│   ├── api/
+│   │   ├── ai/route.ts             # AI generation endpoint
+│   │   └── webhooks/
+│   │       └── stripe/route.ts
+│   ├── layout.tsx
+│   └── page.tsx                    # Landing page
+├── components/
+│   ├── ui/                         # shadcn/ui base components
+│   ├── gdpr/                       # GDPR scrubber UI components
+│   ├── drafting/                   # Drafting Station components
+│   └── shared/                     # Shared layout components
+├── lib/
+│   ├── supabase/                   # Supabase client (server + browser)
+│   ├── stripe/                     # Stripe client + helpers
+│   ├── ai/                         # AI provider abstraction + prompts
+│   ├── gdpr/                       # GDPR scrubber logic (runs client-side only)
+│   └── validations/                # Zod schemas
+├── hooks/                          # Custom React hooks
+├── types/                          # Global TypeScript types
+├── supabase/
+│   ├── migrations/                 # All DB migrations as versioned SQL files
+│   └── seed.sql
+├── middleware.ts                   # Auth middleware
+├── .env.example
+└── .env.local                      # NEVER commit this
+```
+
+### 0.2 Tech Stack
+
+| Layer | Technology | Rationale |
+|---|---|---|
+| Framework | **Next.js 14 (App Router)** | Server Components, Edge Runtime, built-in API routes |
+| Language | **TypeScript 5 (strict)** | Type safety across the entire stack |
+| Styling | **Tailwind CSS + shadcn/ui** | Consistent, accessible component primitives |
+| Auth | **Supabase Auth** | Email/password + magic link; RLS-enforced at DB level |
+| Database | **Supabase (PostgreSQL)** | RLS policies; also used for rate limiting to avoid extra services |
+| AI Provider | **Anthropic Claude** (primary) / GPT-4o (fallback) | Claude has better Swedish language quality |
+| AI SDK | **Vercel AI SDK (`ai` package)** | Streaming, provider abstraction, React hooks |
+| Payments | **Stripe** with Swish + card | Swish is critical for Swedish market adoption |
+| Validation | **Zod** | Runtime type safety on all API boundaries |
+| Error Tracking | **Sentry** | Capture errors without logging user content |
+| Analytics | **Plausible Analytics** | Privacy-preserving, GDPR-compliant, cookieless |
+| Deployment | **Vercel** | Zero-config Next.js deployment |
+
+**Note on rate limiting:** We use Supabase (already in the stack) for per-user request tracking instead of adding Upstash Redis. This is sufficient for MVP scale and removes one external dependency. Add Redis only if abuse becomes a measurable problem.
+
+**Note on AI model:** Before wiring up AI generation, verify the exact current model string in the [Anthropic API documentation](https://docs.anthropic.com/en/docs/about-claude/models). Model string typos silently break generation. Use the latest Claude Sonnet model available.
+
+---
+
+## PHASE 1 — SUPABASE SCHEMA & SECURITY
+
+### 1.1 Database Schema
+
+Run these migrations in order. Each file goes in `supabase/migrations/`.
+
+**Migration 001 — Core tables:**
+
+```sql
+-- Enable UUID extension
+create extension if not exists "uuid-ossp";
+
+-- PROFILES table (extends Supabase auth.users)
+-- IMPORTANT: We store ZERO pedagogical content here. Only account metadata.
+create table public.profiles (
+  id                          uuid references auth.users(id) on delete cascade primary key,
+  email                       text not null,
+  full_name                   text,
+  school_name                 text,                     -- Optional, for UI personalization only
+  subscription_status         text not null default 'free'
+                              check (subscription_status in ('free', 'pro', 'cancelled')),
+  subscription_end_date       timestamptz,              -- Null for monthly recurring; set for 30-day pass
+  stripe_customer_id          text unique,
+  transforms_used_this_month  integer not null default 0,
+  transforms_reset_at         timestamptz not null default date_trunc('month', now()),
+  -- api_call_count tracks requests per minute for server-side rate limiting (no Redis needed)
+  api_call_count              integer not null default 0,
+  api_call_window_start       timestamptz not null default now(),
+  user_settings               jsonb not null default '{}'::jsonb,
+  created_at                  timestamptz not null default now(),
+  updated_at                  timestamptz not null default now()
+);
+
+-- Auto-create profile on signup
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email)
+  values (new.id, new.email);
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- USAGE_EVENTS table (for audit trail — never stores any content)
+-- Stores ONLY: who, when, which template type, and scrubber stats.
+-- No input text. No output text. Ever.
+create table public.usage_events (
+  id                  uuid default uuid_generate_v4() primary key,
+  user_id             uuid references public.profiles(id) on delete cascade not null,
+  template_type       text not null
+                      check (template_type in ('incidentrapport', 'larlogg', 'veckobrev', 'custom')),
+  scrubber_ran        boolean not null default true,
+  pii_tokens_removed  integer not null default 0,      -- Count only, never the actual tokens
+  created_at          timestamptz not null default now()
+);
+
+-- updated_at trigger
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create trigger profiles_updated_at
+  before update on public.profiles
+  for each row execute function public.set_updated_at();
+```
+
+**Migration 002 — Row Level Security:**
+
+```sql
+-- PROFILES: Users can only read/update their own row
+alter table public.profiles enable row level security;
+
+create policy "Users can view own profile"
+  on public.profiles for select
+  using (auth.uid() = id);
+
+create policy "Users can update own profile"
+  on public.profiles for update
+  using (auth.uid() = id)
+  with check (
+    auth.uid() = id
+    -- Prevent users from self-upgrading subscription_status via client
+    and subscription_status = (select subscription_status from public.profiles where id = auth.uid())
+  );
+
+-- USAGE_EVENTS: Users can only insert/read their own events
+alter table public.usage_events enable row level security;
+
+create policy "Users can insert own usage events"
+  on public.usage_events for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can view own usage events"
+  on public.usage_events for select
+  using (auth.uid() = user_id);
+
+-- Service role (used only by Stripe webhook server-side) can update subscription_status.
+-- Enforced by using the service role key ONLY in the webhook handler.
+```
+
+**Migration 003 — Monthly usage reset + pass expiry:**
+
+```sql
+-- Reset monthly transform count on the 1st of each month
+create or replace function public.reset_monthly_transforms()
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  update public.profiles
+  set
+    transforms_used_this_month = 0,
+    transforms_reset_at = date_trunc('month', now())
+  where
+    transforms_reset_at < date_trunc('month', now());
+end;
+$$;
+
+-- Schedule via Supabase Dashboard > Database > Extensions > pg_cron:
+-- select cron.schedule('reset-monthly-transforms', '0 0 1 * *', 'select public.reset_monthly_transforms()');
+
+-- Expire 30-day passes when their end date passes
+create or replace function public.expire_one_time_passes()
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  update public.profiles
+  set subscription_status = 'cancelled'
+  where
+    subscription_status = 'pro'
+    and subscription_end_date is not null
+    and subscription_end_date < now();
+end;
+$$;
+
+-- Schedule daily at midnight:
+-- select cron.schedule('expire-one-time-passes', '0 0 * * *', 'select public.expire_one_time_passes()');
+```
+
+### 1.2 Supabase Client Setup
+
+```typescript
+// lib/supabase/server.ts
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import type { Database } from '@/types/database'
+
+export function createClient() {
+  const cookieStore = cookies()
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options))
+          } catch {} // Safe to ignore in Server Components
+        },
+      },
+    }
+  )
+}
+
+// lib/supabase/admin.ts — ONLY for server-side webhook handlers
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+
+export function createAdminClient() {
+  // NEVER expose SUPABASE_SERVICE_ROLE_KEY to the client. Ever.
+  return createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+```
+
+---
+
+## PHASE 2 — GDPR SCRUBBER
+
+This is the core USP and a legal requirement. Build and test this **before** wiring up the AI. No other phase should begin until all scrubber tests pass.
+
+### 2.1 Architecture Rule
+
+> **THE SCRUBBER RUNS CLIENT-SIDE, IN THE BROWSER, BEFORE ANY NETWORK REQUEST.**
+> Raw teacher input NEVER leaves the user's device. Only the scrubbed text is sent to the API route, which then forwards it to the AI provider. The API route must also never log or store the request body payload.
+
+### 2.2 Important Limitation — Non-Swedish Names
+
+The built-in name list covers common Swedish names from SCB data. It will **not** automatically detect names like Mohammed, Fatima, Hamza, Amir, Zara, Nour, or Yusuf — all of which are common in Swedish classrooms today. To handle this:
+
+1. The UI **must** present a clearly visible "extra names" input field before every generation, where the teacher can add names not in the built-in list.
+2. The UI **must** display a warning if capitalized words remain in the scrubbed text that were not replaced — these may be undetected names.
+3. The Terms of Service must state clearly that the scrubber is best-effort, and teachers retain responsibility for reviewing output.
+
+This "custom names" feature is **not optional** — it is part of the MVP. The alternative is a tool that silently fails GDPR on a large percentage of real Swedish classrooms.
+
+### 2.3 Scrubber Implementation
+
+```typescript
+// lib/gdpr/patterns.ts
+
+export const SWEDISH_PATTERNS = {
+  // Swedish personnummer: YYYYMMDD-XXXX or YYYYMMDD+XXXX or short YYMMDD-XXXX
+  personnummer: /\b(19|20)?\d{6}[-+]\d{4}\b/g,
+
+  // Swedish coordination number (samordningsnummer): day += 60
+  samordningsnummer: /\b(19|20)?\d{2}(0[1-9]|1[0-2])(6[1-9]|[7-8]\d|9[01])[-+]\d{4}\b/g,
+
+  // Phone numbers (Swedish formats)
+  phone: /\b((\+46|0046|0)\s?[-\s]?\d{1,3}[-\s]?\d{3,4}[-\s]?\d{2,4}[-\s]?\d{2,4})\b/g,
+
+  // Email addresses
+  email: /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/g,
+}
+
+// Common Swedish given names from SCB data.
+// IMPORTANT: This list intentionally covers only common Swedish-origin names.
+// Non-Swedish names (Mohammed, Amir, Fatima, etc.) are NOT included here
+// because the list would be impossibly large and error-prone.
+// These are handled via the teacher-provided custom names input in the UI.
+export const COMMON_SWEDISH_NAMES_MASCULINE = [
+  'Adam', 'Alexander', 'Alfred', 'Anders', 'Andreas', 'Anton', 'Axel',
+  'Benjamin', 'Björn', 'Carl', 'Christian', 'Christoffer', 'Daniel', 'David',
+  'Edvin', 'Elias', 'Emil', 'Erik', 'Felix', 'Filip', 'Fredrik',
+  'Gabriel', 'Gustav', 'Hampus', 'Harald', 'Henrik', 'Hugo', 'Jakob',
+  'Johan', 'Johannes', 'Jonas', 'Jonathan', 'Josef', 'Karl', 'Lars',
+  'Leo', 'Liam', 'Linus', 'Ludvig', 'Lucas', 'Magnus', 'Marcus',
+  'Martin', 'Mattias', 'Max', 'Mikael', 'Nils', 'Noah',
+  'Olof', 'Oscar', 'Otto', 'Per', 'Peter', 'Pontus', 'Rasmus',
+  'Robert', 'Robin', 'Samuel', 'Sebastian', 'Simon', 'Stefan', 'Sven',
+  'Theo', 'Thomas', 'Tobias', 'Viktor', 'Vilhelm', 'William', 'Åke',
+]
+
+export const COMMON_SWEDISH_NAMES_FEMININE = [
+  'Agnes', 'Alice', 'Alicia', 'Alva', 'Amanda', 'Amelie', 'Amy',
+  'Astrid', 'Britta', 'Carin', 'Carolina', 'Christina', 'Clara',
+  'Ebba', 'Elin', 'Elisa', 'Elisabet', 'Ella', 'Ellen', 'Elsa',
+  'Emma', 'Emilia', 'Ester', 'Eva', 'Felicia', 'Frida', 'Hanna',
+  'Helena', 'Ida', 'Ingrid', 'Isabella', 'Jenny', 'Jessica', 'Julia',
+  'Karin', 'Katarina', 'Klara', 'Kristina', 'Laura', 'Lena', 'Lina',
+  'Linda', 'Lisa', 'Lotta', 'Louise', 'Maja', 'Maria', 'Malin',
+  'Matilda', 'Mia', 'Moa', 'Nora', 'Olivia', 'Petra', 'Saga',
+  'Sara', 'Selma', 'Sigrid', 'Signe', 'Sofia', 'Sophia', 'Stella',
+  'Stina', 'Tilda', 'Vera', 'Victoria', 'Åsa', 'Åse',
+]
+
+export const COMMON_SWEDISH_NAMES_NEUTRAL = [
+  'Alex', 'Charlie', 'Elliot', 'Kim', 'Linn', 'Love', 'Morgan',
+  'Nico', 'Nova', 'Robin', 'Rut', 'Sam', 'Skye',
+]
+
+export const ALL_SWEDISH_NAMES = [
+  ...COMMON_SWEDISH_NAMES_MASCULINE,
+  ...COMMON_SWEDISH_NAMES_FEMININE,
+  ...COMMON_SWEDISH_NAMES_NEUTRAL,
+]
+```
+
+```typescript
+// lib/gdpr/scrubber.ts
+
+import { SWEDISH_PATTERNS, ALL_SWEDISH_NAMES } from './patterns'
+
+export interface ScrubberResult {
+  scrubbedText: string
+  replacements: Map<string, string>   // Original -> Placeholder (for UI preview)
+  unmatchedCapitalized: string[]      // Capitalized words not replaced — may be undetected names
+  stats: {
+    namesReplaced: number
+    piiTokensReplaced: number
+  }
+}
+
+export interface ScrubberOptions {
+  // Names the teacher has manually added — critical for non-Swedish names
+  customNames?: string[]
+}
+
+export class GdprScrubber {
+  private entityCounter = 0
+  private entityMap = new Map<string, string>()
+
+  private getPlaceholder(original: string, prefix: string = 'Elev'): string {
+    const key = original.toLowerCase()
+    if (!this.entityMap.has(key)) {
+      this.entityCounter++
+      this.entityMap.set(key, `[${prefix} ${this.entityCounter}]`)
+    }
+    return this.entityMap.get(key)!
+  }
+
+  scrub(text: string, options: ScrubberOptions = {}): ScrubberResult {
+    this.entityCounter = 0
+    this.entityMap.clear()
+
+    let processed = text
+    let namesReplaced = 0
+    let piiTokensReplaced = 0
+    const replacements = new Map<string, string>()
+
+    // Step 1: Replace structural PII (personnummer, phone, email) first
+    processed = processed.replace(SWEDISH_PATTERNS.personnummer, () => {
+      piiTokensReplaced++
+      return '[personnummer]'
+    })
+    processed = processed.replace(SWEDISH_PATTERNS.samordningsnummer, () => {
+      piiTokensReplaced++
+      return '[samordningsnummer]'
+    })
+    processed = processed.replace(SWEDISH_PATTERNS.phone, () => {
+      piiTokensReplaced++
+      return '[telefonnummer]'
+    })
+    processed = processed.replace(SWEDISH_PATTERNS.email, () => {
+      piiTokensReplaced++
+      return '[e-postadress]'
+    })
+
+    // Step 2: Build combined name list — built-in Swedish names + teacher-provided custom names
+    // Custom names are trimmed and filtered to avoid empty strings
+    const customNames = (options.customNames ?? [])
+      .map(n => n.trim())
+      .filter(n => n.length > 1)
+
+    const allNames = [...ALL_SWEDISH_NAMES, ...customNames]
+
+    // Step 3: Replace names — sort by length descending to avoid partial replacements
+    // ("Elin" matched before "El" would be if "El" were a name)
+    const sortedNames = allNames.sort((a, b) => b.length - a.length)
+
+    for (const name of sortedNames) {
+      const regex = new RegExp(`\\b${escapeRegex(name)}\\b`, 'gi')
+      processed = processed.replace(regex, (match) => {
+        const placeholder = this.getPlaceholder(match)
+        if (!replacements.has(match)) {
+          replacements.set(match, placeholder)
+          namesReplaced++
+        }
+        return placeholder
+      })
+    }
+
+    // Step 4: Detect remaining capitalized words that may be undetected names
+    // Excludes sentence-initial words and known Swedish common nouns heuristically
+    const unmatchedCapitalized = (processed.match(/(?<!\.\s)\b[A-ZÅÄÖ][a-zåäö]{2,}\b/g) ?? [])
+      .filter(word => !SAFE_CAPITALIZED_WORDS.has(word))
+
+    return {
+      scrubbedText: processed,
+      replacements,
+      unmatchedCapitalized: [...new Set(unmatchedCapitalized)], // deduplicated
+      stats: { namesReplaced, piiTokensReplaced }
+    }
+  }
+}
+
+// Words that are legitimately capitalized in Swedish pedagogical text
+// and should not be flagged as potential names
+const SAFE_CAPITALIZED_WORDS = new Set([
+  'Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lördag', 'Söndag',
+  'Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
+  'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December',
+  'Svenska', 'Matematik', 'Engelska', 'Historia', 'Biologi', 'Kemi',
+  'Fysik', 'Musik', 'Idrott', 'Bild', 'Slöjd', 'Teknik',
+  'Lgr', 'Skolverket', 'Unikum', 'Sverige', 'Stockholm',
+])
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+```
+
+### 2.4 Scrubber Tests
+
+All of the following tests must pass before proceeding to Phase 3. Use Vitest.
+
+```typescript
+// lib/gdpr/__tests__/scrubber.test.ts
+
+describe('GdprScrubber', () => {
+  // ── CRITICAL: If any of these fail, the product cannot ship ──
+
+  it('replaces a common Swedish masculine name (Erik)')
+  it('replaces a common Swedish feminine name (Maja)')
+  it('replaces personnummer in YYYYMMDD-XXXX format')
+  it('replaces personnummer in YYMMDD-XXXX format')
+  it('replaces samordningsnummer')
+  it('replaces email addresses')
+  it('replaces Swedish phone numbers (+46 format)')
+  it('replaces Swedish phone numbers (07X format)')
+  it('is consistent: same name gets same placeholder throughout the text')
+  it('different names get different numbered placeholders')
+  it('handles names in different cases (ERIK, erik, Erik) — maps to same placeholder')
+  it('does not replace partial word matches ("erikson" not triggered by "Erik")')
+  it('accepts and replaces teacher-provided custom names')
+  it('replaces a custom non-Swedish name (Mohammed) when provided by teacher')
+  it('handles text with no PII gracefully and returns it unchanged')
+  it('returns accurate stats (namesReplaced, piiTokensReplaced)')
+  it('flags remaining capitalized words in unmatchedCapitalized')
+  it('does not flag known safe capitalized words (Måndag, Svenska, etc.)')
+  it('handles empty string input without throwing')
+  it('handles custom names with leading/trailing whitespace gracefully')
+})
+```
+
+---
+
+## PHASE 3 — AI INTEGRATION LAYER
+
+### 3.1 Provider Abstraction
+
+```typescript
+// lib/ai/provider.ts
+
+export type AiProvider = 'claude' | 'openai'
+
+export interface GenerateDocumentParams {
+  templateType: 'incidentrapport' | 'larlogg' | 'veckobrev' | 'custom'
+  scrubbedInput: string           // MUST be pre-scrubbed before reaching this function
+  userSettings?: {
+    schoolLevel?: 'F-3' | '4-6' | '7-9'  // Affects tone and vocabulary level
+    preferredTone?: 'formal' | 'warm'
+  }
+  provider?: AiProvider
+}
+```
+
+### 3.2 System Prompts
+
+```typescript
+// lib/ai/prompts.ts
+
+export const BASE_SYSTEM_PROMPT = `
+Du är en expert på pedagogisk dokumentation för svenska grundskolan.
+Du hjälper lärare att skriva professionella, korrekta och empatiska dokument.
+
+KRITISKA REGLER:
+- Skriv alltid på formell, korrekt svenska ("Myndighetssvenska")
+- Använd aldrig riktiga namn — placeholders som [Elev 1] ska bevaras exakt som de är i din output
+- Håll dig strikt till fakta som framgår av inmatningen — hitta aldrig på information
+- Använd könsneutralt språk om inte kön tydligt framgår av kontexten
+- Referera till läroplanen Lgr22 när det är pedagogiskt relevant
+- Outputen ska vara redo att kopiera direkt till ett officiellt dokument
+`
+
+export const TEMPLATE_PROMPTS: Record<string, string> = {
+  incidentrapport: `
+${BASE_SYSTEM_PROMPT}
+
+MALL: INCIDENTRAPPORT (DFrespons-format)
+
+Strukturera rapporten med följande avsnitt:
+1. **Datum och tid** — ange om det framgår, annars [datum/tid ej angiven]
+2. **Beskrivning av händelsen** — objektivt, beteendefokuserat, utan värdeladdade ord
+3. **Inblandade parter** — använd placeholders exakt som de gavs: [Elev 1], [Personal 1] osv.
+4. **Vidtagna åtgärder** — vad gjordes omedelbart
+5. **Uppföljning** — planerade nästa steg
+
+SPRÅKLIGA RIKTLINJER:
+- Beteendebeskrivningar: "Eleven reste sig upp och lämnade klassrummet" (inte "Eleven var busig")
+- Undvik subjektiva tolkningar och värdeladdade adjektiv
+- Skriv i imperfekt (dåtid)
+- Neutral, professionell ton genomgående
+`,
+
+  larlogg: `
+${BASE_SYSTEM_PROMPT}
+
+MALL: LÄRLOGG / PEDAGOGISK DOKUMENTATION (Unikum-format)
+
+Strukturera enligt:
+1. **Aktivitet/sammanhang** — vad gjordes, vilket ämne, vilket moment
+2. **Observation** — vad visade eleven i sitt lärande (Lgr22-kopplat)
+3. **Analys** — vilka förmågor och kunskaper synliggjordes
+4. **Nästa steg** — konkret, framåtsyftande och åtgärdsinriktat
+
+SPRÅKLIGA RIKTLINJER:
+- Positivt och framåtsyftande perspektiv (styrkebaserat)
+- Koppla till kunskapskrav och förmågor i Lgr22 — specificera ämne och relevant del av kursplanen
+- Skriv i ett språk som är begripligt för både kollegor och vårdnadshavare
+`,
+
+  veckobrev: `
+${BASE_SYSTEM_PROMPT}
+
+MALL: VECKOBREV TILL VÅRDNADSHAVARE
+
+Strukturera med:
+1. **Hälsning** — varm och välkomnande
+2. **Veckans händelser** — vad klassen har arbetat med och lärt sig
+3. **Höjdpunkter** — positiva observationer om gruppen som helhet (aldrig enskilda elever med namn)
+4. **Kommande vecka** — vad som planeras
+5. **Praktisk information** — om relevant (utflykter, material att ta med, etc.)
+6. **Avslutning** — vänlig och inbjudande
+
+SPRÅKLIGA RIKTLINJER:
+- Varm, professionell och stöttande ton
+- Fokus på gruppen, aldrig på enskilda individer
+- Tydligt och lättläst — undvik pedagogisk jargong
+- Avsluta med ett positivt budskap
+`,
+}
+```
+
+### 3.3 API Route
+
+```typescript
+// app/api/ai/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
+import Anthropic from '@anthropic-ai/sdk'
+import { TEMPLATE_PROMPTS, BASE_SYSTEM_PROMPT } from '@/lib/ai/prompts'
+
+const RequestSchema = z.object({
+  templateType: z.enum(['incidentrapport', 'larlogg', 'veckobrev', 'custom']),
+  scrubbedInput: z.string().min(10).max(5000),
+  scrubberStats: z.object({
+    namesReplaced: z.number(),
+    piiTokensReplaced: z.number(),
+  }),
+})
+
+// Simple per-user rate limiting using Supabase — no Redis needed at MVP scale.
+// Allows 10 requests per 60-second window per user.
+async function checkRateLimit(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<{ allowed: boolean }> {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('api_call_count, api_call_window_start')
+    .eq('id', userId)
+    .single()
+
+  if (!profile) return { allowed: false }
+
+  const windowStart = new Date(profile.api_call_window_start)
+  const now = new Date()
+  const windowSeconds = 60
+  const maxCallsPerWindow = 10
+
+  const windowExpired = (now.getTime() - windowStart.getTime()) > windowSeconds * 1000
+
+  if (windowExpired) {
+    // Reset window
+    await supabase
+      .from('profiles')
+      .update({ api_call_count: 1, api_call_window_start: now.toISOString() })
+      .eq('id', userId)
+    return { allowed: true }
+  }
+
+  if (profile.api_call_count >= maxCallsPerWindow) {
+    return { allowed: false }
+  }
+
+  await supabase
+    .from('profiles')
+    .update({ api_call_count: profile.api_call_count + 1 })
+    .eq('id', userId)
+
+  return { allowed: true }
+}
+
+export async function POST(req: NextRequest) {
+  // 1. Authenticate
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // 2. Rate limit (per user, via Supabase)
+  const { allowed } = await checkRateLimit(supabase, user.id)
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'För många förfrågningar. Vänta en stund och försök igen.' },
+      { status: 429 }
+    )
+  }
+
+  // 3. Validate input
+  const body = await req.json()
+  const parsed = RequestSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Ogiltig förfrågan' }, { status: 400 })
+  }
+
+  // 4. Check usage quota
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('subscription_status, transforms_used_this_month, subscription_end_date')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    return NextResponse.json({ error: 'Profil hittades inte' }, { status: 404 })
+  }
+
+  const isPro = profile.subscription_status === 'pro' &&
+    (profile.subscription_end_date === null ||
+     new Date(profile.subscription_end_date) > new Date())
+
+  // Free tier: 10 transforms per month — enough to build a habit before hitting the wall
+  const FREE_LIMIT = 10
+  if (!isPro && profile.transforms_used_this_month >= FREE_LIMIT) {
+    return NextResponse.json(
+      { error: 'Månadens gratisgräns nådd', code: 'QUOTA_EXCEEDED' },
+      { status: 403 }
+    )
+  }
+
+  // 5. Generate with Claude (streaming)
+  // IMPORTANT: Verify the current model string at https://docs.anthropic.com/en/docs/about-claude/models
+  // before deploying. Use the latest Claude Sonnet model.
+  const anthropic = new Anthropic()
+  const { templateType, scrubbedInput } = parsed.data
+
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const claudeStream = await anthropic.messages.stream({
+          model: 'claude-sonnet-4-20250514', // ← Verify this string before deploying
+          max_tokens: 2048,
+          system: TEMPLATE_PROMPTS[templateType] ?? BASE_SYSTEM_PROMPT,
+          messages: [
+            {
+              role: 'user',
+              content: `Här är lärarens anteckningar (all personinformation är borttagen av GDPR-skölden):\n\n${scrubbedInput}`
+            }
+          ],
+        })
+
+        for await (const chunk of claudeStream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+            controller.enqueue(encoder.encode(chunk.delta.text))
+          }
+        }
+
+        // Log usage event — NO CONTENT, only metadata
+        await supabase.from('usage_events').insert({
+          user_id: user.id,
+          template_type: templateType,
+          scrubber_ran: true,
+          pii_tokens_removed:
+            parsed.data.scrubberStats.namesReplaced +
+            parsed.data.scrubberStats.piiTokensReplaced,
+        })
+
+        // Increment monthly usage counter
+        await supabase
+          .from('profiles')
+          .update({ transforms_used_this_month: profile.transforms_used_this_month + 1 })
+          .eq('id', user.id)
+
+        controller.close()
+      } catch (error) {
+        // Log to Sentry WITHOUT including the request body
+        console.error('[AI Route] Generation failed:', error instanceof Error ? error.message : 'Unknown error')
+        controller.error(error)
+      }
+    }
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    }
+  })
+}
+```
+
+---
+
+## PHASE 4 — STRIPE INTEGRATION
+
+### 4.1 Stripe Products
+
+Create these in the Stripe Dashboard before writing code:
+
+| Product | Type | Price | Env var |
+|---|---|---|---|
+| Skolskribenten Pro — Månadsabonnemang | Recurring | 49 SEK/month | `STRIPE_PRICE_MONTHLY_PRO` |
+| Skolskribenten Pro — 30-dagarskort | One-time | 49 SEK | `STRIPE_PRICE_ONETIME_30DAY` |
+
+**Swish:** Go to Stripe Dashboard → Settings → Payment Methods → Sweden → Enable Swish. This is a manual step and cannot be done in code.
+
+### 4.2 Checkout Session
+
+```typescript
+// app/api/stripe/checkout/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import Stripe from 'stripe'
+import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
+
+const CheckoutSchema = z.object({
+  priceType: z.enum(['monthly', 'onetime']),
+})
+
+export async function POST(req: NextRequest) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { priceType } = CheckoutSchema.parse(await req.json())
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('stripe_customer_id, email')
+    .eq('id', user.id)
+    .single()
+
+  let customerId = profile?.stripe_customer_id
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: profile?.email ?? user.email,
+      metadata: { supabase_user_id: user.id },
+    })
+    customerId = customer.id
+    await supabase
+      .from('profiles')
+      .update({ stripe_customer_id: customerId })
+      .eq('id', user.id)
+  }
+
+  const isRecurring = priceType === 'monthly'
+  const priceId = isRecurring
+    ? process.env.STRIPE_PRICE_MONTHLY_PRO!
+    : process.env.STRIPE_PRICE_ONETIME_30DAY!
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    mode: isRecurring ? 'subscription' : 'payment',
+    line_items: [{ price: priceId, quantity: 1 }],
+    payment_method_types: ['card', 'swish'],
+    locale: 'sv',
+    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/konto?payment=success`,
+    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/konto?payment=cancelled`,
+    metadata: {
+      supabase_user_id: user.id,
+      price_type: priceType,
+    },
+  })
+
+  return NextResponse.json({ url: session.url })
+}
+```
+
+### 4.3 Stripe Webhook Handler
+
+```typescript
+// app/api/webhooks/stripe/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import Stripe from 'stripe'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { addDays } from 'date-fns'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
+
+export async function POST(req: NextRequest) {
+  const body = await req.text()
+  const signature = req.headers.get('stripe-signature')!
+
+  let event: Stripe.Event
+  try {
+    event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!)
+  } catch {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  }
+
+  const supabase = createAdminClient()
+
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session
+      const userId = session.metadata?.supabase_user_id
+      const priceType = session.metadata?.price_type
+
+      if (!userId) break
+
+      if (priceType === 'monthly') {
+        await supabase
+          .from('profiles')
+          .update({ subscription_status: 'pro', subscription_end_date: null })
+          .eq('id', userId)
+      } else if (priceType === 'onetime') {
+        await supabase
+          .from('profiles')
+          .update({
+            subscription_status: 'pro',
+            subscription_end_date: addDays(new Date(), 30).toISOString(),
+          })
+          .eq('id', userId)
+      }
+      break
+    }
+
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as Stripe.Subscription
+      const customer = await stripe.customers.retrieve(subscription.customer as string)
+      if ('metadata' in customer && customer.metadata.supabase_user_id) {
+        await supabase
+          .from('profiles')
+          .update({ subscription_status: 'cancelled', subscription_end_date: null })
+          .eq('id', customer.metadata.supabase_user_id)
+      }
+      break
+    }
+
+    case 'invoice.payment_failed': {
+      // TODO post-MVP: send email notification via Supabase email service
+      break
+    }
+  }
+
+  return NextResponse.json({ received: true })
+}
+
+export const config = { api: { bodyParser: false } }
+```
+
+---
+
+## PHASE 5 — FRONTEND
+
+### 5.1 Design System
+
+```css
+/* app/globals.css */
+:root {
+  /* Primary palette — Swedish blue-green, clean and professional */
+  --ss-primary:           #4A7FA5;
+  --ss-primary-light:     #E8F1F8;
+  --ss-secondary:         #6BAB90;
+  --ss-secondary-light:   #EAF4EE;
+  --ss-accent:            #E8A87C;  /* Warm amber — Pro badge, CTAs */
+  --ss-danger:            #C0392B;
+  --ss-neutral-50:        #F8F7F5;  /* Warm white — not clinical */
+  --ss-neutral-100:       #EEECEA;
+  --ss-neutral-200:       #D5D3D0;
+  --ss-neutral-800:       #2C2B29;
+  --ss-neutral-900:       #1A1917;
+}
+```
+
+### 5.2 Landing Page
+
+The landing page (`app/page.tsx`) must answer three questions immediately and without scrolling:
+
+1. **Vad är det?** — *"Skriv pedagogisk dokumentation på sekunder, inte timmar."*
+2. **Hur skyddar det mina elever?** — Brief explanation of the GDPR shield with a visual
+3. **Vad kostar det?** — Pricing clearly visible: free tier + Pro options
+
+Structure the page as:
+
+- **Hero** — Headline, subheadline, single CTA ("Prova gratis — 10 omvandlingar per månad")
+- **Hur det fungerar** — Three-step explainer: Skriv → GDPR-skölden skyddar → Färdigt dokument
+- **GDPR-transparens** — A plain-language explanation of what is and isn't stored. This section builds the trust that makes teachers willing to try the product.
+- **Mallar** — Visual cards for the three template types: Incidentrapport, Lärlogg, Veckobrev
+- **Priser** — The two Pro options side by side (see §5.4 copy guidelines)
+- **Footer** — Integritetspolicy, Användarvillkor, Kontakt
+
+### 5.3 First-Run / Empty State
+
+When a teacher lands on `/skrivstation` for the first time, the textarea should not be blank. Show a filled-in example in greyed placeholder style:
+
+```
+Exempeltext: "Eleven hade svårt att sitta still under matematiklektionen och 
+störde de andra eleverna tre gånger. Vi pratade efteråt och kom överens om att 
+eleven ska sitta närmast tavlan nästa vecka. Elevens föräldrar informerades."
+
+Välj mall och klicka "Generera" — texten ovan är bara ett exempel, skriv din egen.
+```
+
+This removes the blank-page paralysis that causes drop-off in documentation tools.
+
+### 5.4 The Drafting Station
+
+```tsx
+// components/drafting/DraftingStation.tsx
+'use client'
+
+import { useState, useCallback } from 'react'
+import { GdprScrubber } from '@/lib/gdpr/scrubber'
+import { useCompletion } from 'ai/react'
+import { GdprBadge } from '@/components/gdpr/GdprBadge'
+import { GdprNameInput } from '@/components/gdpr/GdprNameInput'
+import { TemplatePicker } from './TemplatePicker'
+import { OutputPanel } from './OutputPanel'
+import { UsageCounter } from './UsageCounter'
+import type { TemplateType, ScrubberStats } from '@/types'
+
+const scrubber = new GdprScrubber()
+
+export function DraftingStation({ userProfile }: { userProfile: Profile }) {
+  const [rawInput, setRawInput] = useState('')
+  const [customNames, setCustomNames] = useState<string[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('larlogg')
+  const [scrubberStats, setScrubberStats] = useState<ScrubberStats | null>(null)
+  const [unmatchedWarnings, setUnmatchedWarnings] = useState<string[]>([])
+
+  const { complete, completion, isLoading, error } = useCompletion({
+    api: '/api/ai',
+  })
+
+  const handleGenerate = useCallback(async () => {
+    if (!rawInput.trim()) return
+
+    // STEP 1: Run scrubber client-side FIRST — raw text never leaves this device
+    const result = scrubber.scrub(rawInput, { customNames })
+
+    setScrubberStats(result.stats)
+    setUnmatchedWarnings(result.unmatchedCapitalized)
+
+    // STEP 2: Send ONLY the scrubbed text to the API
+    await complete('', {
+      body: {
+        templateType: selectedTemplate,
+        scrubbedInput: result.scrubbedText,
+        scrubberStats: result.stats,
+      }
+    })
+  }, [rawInput, customNames, selectedTemplate, complete])
+
+  return (
+    <div className="flex flex-col h-screen bg-[var(--ss-neutral-50)]">
+      {/* Top bar */}
+      <header className="flex items-center justify-between px-6 py-3 border-b 
+                         border-[var(--ss-neutral-200)] bg-white">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-medium text-[var(--ss-neutral-900)]">Skrivstation</h1>
+          <TemplatePicker value={selectedTemplate} onChange={setSelectedTemplate} />
+        </div>
+        <div className="flex items-center gap-3">
+          <UsageCounter profile={userProfile} />
+          <GdprBadge stats={scrubberStats} />
+        </div>
+      </header>
+
+      {/* Split panels */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: Raw Input */}
+        <div className="flex flex-col w-1/2 border-r border-[var(--ss-neutral-200)]">
+          <div className="px-4 py-2 bg-white border-b border-[var(--ss-neutral-100)]">
+            <span className="text-xs font-medium text-[var(--ss-neutral-800)] 
+                             uppercase tracking-wide">
+              Dina anteckningar
+            </span>
+          </div>
+
+          {/* Custom names input — always visible, not hidden in settings */}
+          <GdprNameInput
+            value={customNames}
+            onChange={setCustomNames}
+          />
+
+          <textarea
+            className="flex-1 resize-none p-4 text-sm text-[var(--ss-neutral-900)] 
+                       bg-[var(--ss-neutral-50)] focus:outline-none 
+                       placeholder:text-[var(--ss-neutral-200)]"
+            placeholder="Skriv eller klistra in dina råa anteckningar här. Du kan använda elevers namn — GDPR-skölden tar bort dem automatiskt innan texten lämnar din enhet."
+            value={rawInput}
+            onChange={(e) => setRawInput(e.target.value)}
+          />
+
+          {/* Unmatched name warning */}
+          {unmatchedWarnings.length > 0 && (
+            <div className="px-4 py-2 text-xs text-amber-800 bg-amber-50 
+                            border-t border-amber-200">
+              ⚠ Dessa ord kan vara namn som inte kändes igen automatiskt:{' '}
+              <strong>{unmatchedWarnings.join(', ')}</strong>.{' '}
+              Lägg till dem i namnlistan ovan om det stämmer.
+            </div>
+          )}
+
+          <div className="p-3 border-t border-[var(--ss-neutral-100)] bg-white">
+            <button
+              onClick={handleGenerate}
+              disabled={isLoading || !rawInput.trim()}
+              className="w-full py-2 px-4 rounded-lg bg-[var(--ss-primary)] text-white 
+                         text-sm font-medium transition-opacity disabled:opacity-50 
+                         hover:opacity-90"
+            >
+              {isLoading ? 'Genererar...' : 'Generera dokument →'}
+            </button>
+          </div>
+        </div>
+
+        {/* Right: Output */}
+        <OutputPanel
+          completion={completion}
+          isLoading={isLoading}
+          error={error?.message}
+          templateType={selectedTemplate}
+        />
+      </div>
+    </div>
+  )
+}
+```
+
+### 5.5 GDPR Name Input Component
+
+This component is always visible in the Drafting Station — not hidden in settings. It is a key part of the GDPR guarantee.
+
+```tsx
+// components/gdpr/GdprNameInput.tsx
+'use client'
+
+import { useState } from 'react'
+
+interface Props {
+  value: string[]
+  onChange: (names: string[]) => void
+}
+
+export function GdprNameInput({ value, onChange }: Props) {
+  const [inputValue, setInputValue] = useState('')
+
+  const addName = () => {
+    const trimmed = inputValue.trim()
+    if (trimmed && !value.includes(trimmed)) {
+      onChange([...value, trimmed])
+    }
+    setInputValue('')
+  }
+
+  const removeName = (name: string) => {
+    onChange(value.filter(n => n !== name))
+  }
+
+  return (
+    <div className="px-4 py-2 bg-[var(--ss-primary-light)] border-b 
+                    border-[var(--ss-neutral-200)]">
+      <p className="text-xs text-[var(--ss-neutral-800)] mb-1.5">
+        <strong>Extra namn att skydda</strong> — lägg till namn som inte är vanliga svenska namn 
+        (t.ex. Mohammed, Amir, Fatima)
+      </p>
+      <div className="flex gap-2 flex-wrap mb-1.5">
+        {value.map(name => (
+          <span key={name}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full 
+                           bg-[var(--ss-primary)] text-white text-xs">
+            {name}
+            <button onClick={() => removeName(name)}
+                    className="hover:opacity-75"
+                    aria-label={`Ta bort ${name}`}>
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addName()}
+          placeholder="Skriv ett namn och tryck Enter"
+          className="flex-1 text-xs px-2 py-1 rounded border border-[var(--ss-neutral-200)] 
+                     bg-white focus:outline-none focus:border-[var(--ss-primary)]"
+        />
+        <button
+          onClick={addName}
+          className="px-3 py-1 text-xs rounded bg-[var(--ss-primary)] 
+                     text-white hover:opacity-90"
+        >
+          Lägg till
+        </button>
+      </div>
+    </div>
+  )
+}
+```
+
+### 5.6 GDPR Badge Component
+
+```tsx
+// components/gdpr/GdprBadge.tsx
+'use client'
+
+import type { ScrubberStats } from '@/types'
+
+interface Props {
+  stats: ScrubberStats | null
+}
+
+export function GdprBadge({ stats }: Props) {
+  if (!stats) {
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+                      bg-[var(--ss-neutral-100)] text-xs text-[var(--ss-neutral-800)]">
+        <span className="w-2 h-2 rounded-full bg-[var(--ss-neutral-200)]" />
+        GDPR-sköld aktiv
+      </div>
+    )
+  }
+
+  const totalRemoved = stats.namesReplaced + stats.piiTokensReplaced
+  return (
+    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+                    bg-green-50 text-xs text-green-800 border border-green-200">
+      <span className="w-2 h-2 rounded-full bg-green-500" />
+      {totalRemoved > 0
+        ? `${totalRemoved} uppgifter skyddade`
+        : 'Inga personuppgifter hittades'
+      }
+    </div>
+  )
+}
+```
+
+### 5.7 Pricing / Account Page
+
+Located at `/app/(dashboard)/konto/page.tsx`. Must show:
+
+- Current plan and transforms used this month (e.g. "3 av 10 gratis omvandlingar använda")
+- Two Pro upgrade options side by side
+- Clear, honest copy — no dark patterns
+
+**Required copy:**
+
+| Element | Copy |
+|---|---|
+| Free tier label | **Gratis — 10 omvandlingar per månad** |
+| Monthly Pro label | **Pro — Obegränsade omvandlingar, 49 kr/mån** |
+| Monthly Pro note | **Ingen bindningstid. Avsluta när som helst.** |
+| One-time label | **30-dagarskort — Obegränsade omvandlingar i 30 dagar, 49 kr** |
+| One-time note | **Förnyas inte automatiskt.** |
+| Quota exceeded message | **Du har använt dina 10 gratis omvandlingar den här månaden. Uppgradera för att fortsätta.** |
+
+---
+
+## PHASE 6 — MIDDLEWARE & SECURITY HEADERS
+
+*(Human review only — include this in the agent prompt)*
+
+```typescript
+// middleware.ts
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
+const PROTECTED_ROUTES = ['/skrivstation', '/installningar', '/konto']
+
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
+
+  res.headers.set('X-Frame-Options', 'DENY')
+  res.headers.set('X-Content-Type-Options', 'nosniff')
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  res.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+    "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.stripe.com;"
+  )
+
+  const isProtected = PROTECTED_ROUTES.some(route => req.nextUrl.pathname.startsWith(route))
+  if (!isProtected) return res
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => req.cookies.getAll(), setAll: () => {} } }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.redirect(new URL('/logga-in', req.url))
+  }
+
+  return res
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/webhooks).*)'],
+}
+```
+
+---
+
+## PHASE 7 — ENVIRONMENT VARIABLES
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=        # NEVER expose to client. Webhook handler only.
+
+# AI Providers
+ANTHROPIC_API_KEY=                 # Primary
+OPENAI_API_KEY=                    # Fallback (wire up only if Claude is unavailable)
+
+# Stripe
+STRIPE_SECRET_KEY=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_MONTHLY_PRO=
+STRIPE_PRICE_ONETIME_30DAY=
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Error tracking (Sentry — no user content is logged)
+SENTRY_DSN=
+NEXT_PUBLIC_SENTRY_DSN=
+
+# Analytics (Plausible — cookieless, no consent banner needed)
+NEXT_PUBLIC_PLAUSIBLE_DOMAIN=
+```
+
+---
+
+## HUMAN-ONLY: Pre-Launch Checklist
+
+Do not give this section to the AI agent. Work through it yourself before inviting any real users.
+
+### GDPR Verification (Critical — do this first)
+
+- [ ] Open the Skrivstation and type: *"Erik var väldigt stökig idag. Han lämnade klassrummet utan tillstånd tre gånger."*
+- [ ] Click "Generera dokument"
+- [ ] **PASS:** Output contains `[Elev 1]`, never "Erik"
+- [ ] **FAIL:** If "Erik" appears anywhere in the output — stop, the scrubber failed
+- [ ] Open browser Network tab → find the POST to `/api/ai` → inspect the request payload → confirm "Erik" is NOT present in the payload
+- [ ] Repeat the test with a custom name (e.g. "Mohammed") added via the name input field
+- [ ] Confirm the custom name is also absent from the network request payload
+
+### Subscription Verification
+
+- [ ] Register a new account → use 10 free transforms → confirm the 11th is blocked with the correct Swedish error message
+- [ ] Complete Stripe checkout in test mode (monthly) → confirm `subscription_status = 'pro'` in Supabase
+- [ ] Complete Stripe checkout in test mode (30-day) → confirm `subscription_end_date` is set to ~30 days from now
+- [ ] Manually set `subscription_end_date` to yesterday in Supabase → run `expire_one_time_passes()` → confirm status reverts to `free`
+- [ ] Cancel subscription via Stripe test dashboard → confirm webhook fires → confirm profile updates
+
+### Security Verification
+
+- [ ] Confirm unauthenticated requests to `/api/ai` return 401
+- [ ] Confirm a free user cannot exceed 10 transforms via repeated direct API calls
+- [ ] Confirm `SUPABASE_SERVICE_ROLE_KEY` does not appear in any client-side JS bundle (check Network tab → JS files → search for the key prefix)
+- [ ] Confirm Stripe webhook rejects requests with invalid signatures (send a test with a wrong secret)
+
+### Swedish Language & UX Verification
+
+- [ ] Every visible UI string is in Swedish (check auth emails in Supabase Dashboard → Auth → Email Templates — customize to Swedish)
+- [ ] AI output for all three templates reads as professional Myndighetssvenska
+- [ ] Error messages are in Swedish, including rate limit and quota messages
+- [ ] The first-run empty state example is visible and clear to a first-time user
+
+### Vercel Deployment Checklist
+
+- [ ] All environment variables set in Vercel Dashboard (not just `.env.local`)
+- [ ] Stripe webhook endpoint registered: `https://yourdomain.com/api/webhooks/stripe`
+- [ ] Swish payment method enabled in Stripe Dashboard (manual step)
+- [ ] Supabase pg_cron jobs scheduled (monthly reset + daily expiry)
+- [ ] Supabase CORS restricted to production domain only
+- [ ] Custom domain added and SSL verified in Vercel
+- [ ] Sentry project created and DSN added
+- [ ] Plausible domain registered
+
+---
+
+## APPENDIX A — FUTURE ROADMAP (Do not build now)
+
+| Feature | Notes |
+|---|---|
+| Åtgärdsprogram (ÅP) template | Structured IEP-equivalent — high demand |
+| Unikum clipboard export | Format output to paste directly into Unikum |
+| Voice-to-text input | Useful between lessons on a phone |
+| Pre-loaded class name list | Teacher uploads their class roster once; scrubber uses it automatically |
+| Shared school workspace | Multi-teacher accounts under one school license |
+| Offline scrubber mode | Service worker — scrubber works without internet |
+| Mobile PWA | Teachers use phones; PWA before native |
+| Admin dashboard | Usage analytics, churn detection — needed at scale |
+
+---
+
+## APPENDIX B — LEGAL NOTES (Human review — not for agent)
+
+- **IMY compliance:** No personally identifiable content is stored or transmitted to third-party AI providers. The client-side scrubber is the technical enforcement of this guarantee. Document this architecture in your Privacy Policy.
+- **Terms of Service:** Must state explicitly that the GDPR scrubber is best-effort, that the built-in name list does not cover all names used in Swedish classrooms, and that teachers remain responsible for reviewing AI output before any official use.
+- **Personuppgiftsbiträdesavtal (PuB-avtal):** If any PII ever reaches Anthropic's API despite the scrubber, a PuB-avtal with Anthropic would be required. Given the architecture, this risk is minimized — but legal review is recommended before marketing the product to schools, as schools are public authorities with stricter GDPR obligations.
+- **Accessibility:** Target WCAG 2.1 AA throughout. Use `axe-core` to catch regressions.
+- **Cookie consent:** Plausible is cookieless — no consent banner needed. If you add any other tracking tools, GDPR consent is required.
