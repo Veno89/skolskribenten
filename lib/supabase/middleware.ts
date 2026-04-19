@@ -14,6 +14,8 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   const connectSrc = isDevelopment
     ? "connect-src 'self' ws: wss: https://*.supabase.co https://api.anthropic.com https://api.stripe.com;"
     : "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.stripe.com;";
+  const assetSrc = "img-src 'self' data: blob:; font-src 'self' data:;";
+  const objectSrc = isDevelopment ? "object-src 'self' data:;" : "object-src 'none';";
 
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -21,7 +23,7 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   response.headers.set(
     "Content-Security-Policy",
-    `default-src 'self'; ${scriptSrc} style-src 'self' 'unsafe-inline'; ${connectSrc}`,
+    `default-src 'self'; base-uri 'self'; form-action 'self'; ${scriptSrc} style-src 'self' 'unsafe-inline'; ${assetSrc} ${objectSrc} ${connectSrc}`,
   );
 
   return response;

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DocumentRenderer } from "@/components/drafting/DocumentRenderer";
 import type { TemplateType } from "@/types";
 
 interface Props {
@@ -96,11 +97,7 @@ export function OutputPanel({
         ) : null}
 
         {completion ? (
-          <div className="rounded-[1.75rem] border border-[var(--ss-neutral-100)] bg-[var(--ss-neutral-50)] p-6 shadow-sm">
-            <pre className="whitespace-pre-wrap text-sm leading-8 text-[var(--ss-neutral-900)]">
-              {completion}
-            </pre>
-          </div>
+          <DocumentRenderer content={completion} templateType={templateType} />
         ) : null}
       </div>
     </div>
