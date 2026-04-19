@@ -16,12 +16,18 @@ interface UseCompletionResult {
   completion: string;
   isLoading: boolean;
   error?: Error;
+  reset: () => void;
 }
 
 export function useCompletion({ api }: UseCompletionOptions): UseCompletionResult {
   const [completion, setCompletion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
+
+  const reset = () => {
+    setCompletion("");
+    setError(undefined);
+  };
 
   const complete = async (
     prompt: string,
@@ -94,5 +100,6 @@ export function useCompletion({ api }: UseCompletionOptions): UseCompletionResul
     completion,
     isLoading,
     error,
+    reset,
   };
 }

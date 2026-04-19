@@ -23,6 +23,14 @@ describe("getSystemPrompt", () => {
     expect(prompt).toContain("varmare och mer stödjande språk");
   });
 
+  it("includes the new Unikum-specific structure", () => {
+    const prompt = getSystemPrompt("unikum");
+
+    expect(prompt).toContain("MALL: UNIKUM-DOKUMENTATION");
+    expect(prompt).toContain("Sammanhang:");
+    expect(prompt).toContain("Koppling till lärande/mål:");
+  });
+
   it("leaves the prompt untouched when no settings are saved", () => {
     const prompt = getSystemPrompt("incidentrapport");
 

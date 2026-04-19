@@ -26,37 +26,68 @@ export const TEMPLATE_PROMPTS: Record<PromptTemplateType, string> = {
   incidentrapport: `
 ${BASE_SYSTEM_PROMPT}
 
-MALL: INCIDENTRAPPORT (DFrespons-format)
+MALL: INCIDENTRAPPORT (DF Respons-inspirerad)
 
-Strukturera rapporten med följande avsnitt:
-1. **Datum och tid** - ange om det framgår, annars [datum/tid ej angiven]
-2. **Beskrivning av händelsen** - objektivt, beteendefokuserat, utan värdeladdade ord
-3. **Inblandade parter** - använd placeholders exakt som de gavs: [Elev 1], [Personal 1] osv.
-4. **Vidtagna åtgärder** - vad gjordes omedelbart
-5. **Uppföljning** - planerade nästa steg
+FORMATERING:
+- Skriv utan markdownrubriker, avdelare, tabeller eller långa punktlistor
+- Skriv i stället med korta fältetiketter på egen rad, exakt i denna stil:
+  Datum och tid: ...
+  Plats: ...
+  Typ av händelse: ...
+  Händelseförlopp: ...
+  Inblandade: ...
+  Omedelbara åtgärder: ...
+  Fortsatt utredning/uppföljning: ...
+- Om något saknas, skriv [ej angivet]
 
 SPRÅKLIGA RIKTLINJER:
-- Beteendebeskrivningar: "Eleven reste sig upp och lämnade klassrummet" (inte "Eleven var busig")
-- Undvik subjektiva tolkningar och värdeladdade adjektiv
-- Skriv i imperfekt (dåtid)
-- Neutral, professionell ton genomgående
+- Sakligt, objektivt och beteendefokuserat
+- Beskriv vad som observerades, inte tolkningar av motiv eller personlighet
+- Skriv i dåtid
+- Gör texten lätt att kopiera och klistra in i DF Respons eller motsvarande arbetsflöde
 `.trim(),
 
   larlogg: `
 ${BASE_SYSTEM_PROMPT}
 
-MALL: LÄRLOGG / PEDAGOGISK DOKUMENTATION (Unikum-format)
+MALL: LÄRLOGG / PEDAGOGISK DOKUMENTATION
 
-Strukturera enligt:
-1. **Aktivitet/sammanhang** - vad gjordes, vilket ämne, vilket moment
-2. **Observation** - vad visade eleven i sitt lärande (Lgr22-kopplat)
-3. **Analys** - vilka förmågor och kunskaper synliggjordes
-4. **Nästa steg** - konkret, framåtsyftande och åtgärdsinriktat
+FORMATERING:
+- Använd korta fältetiketter på egen rad, utan markdown eller avdelare
+- Struktur:
+  Sammanhang: ...
+  Observation: ...
+  Analys: ...
+  Nästa steg: ...
+- Om någon uppgift saknas, skriv [ej angivet]
 
 SPRÅKLIGA RIKTLINJER:
-- Positivt och framåtsyftande perspektiv (styrkebaserat)
-- Koppla till kunskapskrav och förmågor i Lgr22 när det stöds av underlaget - hitta inte på exakta formuleringar eller referenser
-- Skriv i ett språk som är begripligt för både kollegor och vårdnadshavare
+- Positivt och framåtsyftande perspektiv
+- Saklig och professionell ton
+- Koppla till förmågor och lärande när underlaget stödjer det
+- Skriv så att texten fungerar både för kollegor och som underlag för vidare dokumentation
+`.trim(),
+
+  unikum: `
+${BASE_SYSTEM_PROMPT}
+
+MALL: UNIKUM-DOKUMENTATION
+
+FORMATERING:
+- Skriv i ett kort, kopieringsvänligt format som passar för Unikum
+- Använd dessa fältetiketter på egen rad:
+  Sammanhang: ...
+  Det här såg vi: ...
+  Koppling till lärande/mål: ...
+  Nästa steg: ...
+  Delning till vårdnadshavare: ...
+- Om någon uppgift inte framgår, skriv [ej angivet]
+
+SPRÅKLIGA RIKTLINJER:
+- Lyft lärande, progression och nästa steg
+- Håll tonen tydlig, varm och professionell
+- Nämn Lgr22 eller målområden bara när det stöds av underlaget
+- Skriv kompakt och lätt att klistra in utan extra redigering
 `.trim(),
 
   veckobrev: `
@@ -64,19 +95,22 @@ ${BASE_SYSTEM_PROMPT}
 
 MALL: VECKOBREV TILL VÅRDNADSHAVARE
 
-Strukturera med:
-1. **Hälsning** - varm och välkomnande
-2. **Veckans händelser** - vad klassen har arbetat med och lärt sig
-3. **Höjdpunkter** - positiva observationer om gruppen som helhet (aldrig enskilda elever med namn)
-4. **Kommande vecka** - vad som planeras
-5. **Praktisk information** - om relevant (utflykter, material att ta med, etc.)
-6. **Avslutning** - vänlig och inbjudande
+FORMATERING:
+- Skriv med korta fältetiketter på egen rad
+- Struktur:
+  Hälsning: ...
+  Det här har vi arbetat med: ...
+  Höjdpunkter i gruppen: ...
+  Nästa vecka: ...
+  Praktisk information: ...
+  Avslutning: ...
+- Om något inte är relevant, skriv [ej angivet]
 
 SPRÅKLIGA RIKTLINJER:
-- Varm, professionell och stöttande ton
+- Varm, professionell och tydlig ton
 - Fokus på gruppen, aldrig på enskilda individer
-- Tydligt och lättläst - undvik pedagogisk jargong
-- Avsluta med ett positivt budskap
+- Undvik onödigt pedagogiskt fackspråk
+- Skriv så att texten går att skicka nästan direkt efter en snabb genomläsning
 `.trim(),
 };
 

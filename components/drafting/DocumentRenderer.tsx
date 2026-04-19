@@ -2,41 +2,17 @@
 
 import { Fragment, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
 import type { TemplateType } from "@/types";
 
 type DocumentBlock =
   | { type: "divider" }
   | { type: "heading"; level: 2 | 3; text: string }
   | { type: "section"; text: string }
+  | { type: "field"; label: string; text: string }
   | { type: "paragraph"; text: string }
   | { type: "list"; items: string[] }
   | { type: "blockquote"; paragraphs: string[] };
-
-const TEMPLATE_META: Record<
-  TemplateType,
-  { label: string; eyebrow: string; summary: string }
-> = {
-  incidentrapport: {
-    label: "Incidentrapport",
-    eyebrow: "AI-utkast",
-    summary: "Saklig struktur för dokumentation, åtgärder och uppföljning.",
-  },
-  larlogg: {
-    label: "Lärlogg",
-    eyebrow: "AI-utkast",
-    summary: "Pedagogisk dokumentation med lärandefokus och nästa steg.",
-  },
-  veckobrev: {
-    label: "Veckobrev",
-    eyebrow: "AI-utkast",
-    summary: "Tydlig kommunikation till vårdnadshavare i ett varmtonat format.",
-  },
-  custom: {
-    label: "Eget dokument",
-    eyebrow: "AI-utkast",
-    summary: "Ett bearbetat utkast som går att justera vidare innan du använder det.",
-  },
-};
 
 function isDividerLine(line: string): boolean {
   return /^---+$/.test(line.trim());
@@ -48,6 +24,12 @@ function getHeadingMatch(line: string): RegExpMatchArray | null {
 
 function isSectionLine(line: string): boolean {
   return /^\*\*.+\*\*$/.test(line.trim());
+}
+
+function getFieldMatch(line: string): RegExpMatchArray | null {
+  return line
+    .trim()
+    .match(/^([A-ZÅÄÖa-zåäö0-9][A-ZÅÄÖa-zåäö0-9 /()&-]{1,40}):\s*(.+)$/);
 }
 
 function isBulletLine(line: string): boolean {
@@ -63,6 +45,7 @@ function isStructuralLine(line: string): boolean {
     isDividerLine(line) ||
     Boolean(getHeadingMatch(line)) ||
     isSectionLine(line) ||
+    Boolean(getFieldMatch(line)) ||
     isBulletLine(line) ||
     isBlockquoteLine(line)
   );
@@ -106,6 +89,25 @@ function parseDocument(content: string): DocumentBlock[] {
         text: trimmed.replace(/^\*\*|\*\*$/g, "").trim(),
       });
       index += 1;
+      continue;
+    }
+
+    const fieldMatch = getFieldMatch(trimmed);
+
+    if (fieldMatch) {
+      const extraLines: string[] = [];
+      index += 1;
+
+      while (index < lines.length && lines[index].trim() && !isStructuralLine(lines[index])) {
+        extraLines.push(lines[index].trim());
+        index += 1;
+      }
+
+      blocks.push({
+        type: "field",
+        label: fieldMatch[1].trim(),
+        text: [fieldMatch[2].trim(), ...extraLines].join(" ").trim(),
+      });
       continue;
     }
 
@@ -190,7 +192,7 @@ interface Props {
 
 export function DocumentRenderer({ content, templateType }: Props): JSX.Element {
   const blocks = parseDocument(content);
-  const meta = TEMPLATE_META[templateType];
+  const meta = TEMPLATE_DETAILS[templateType];
 
   return (
     <article className="relative overflow-hidden rounded-[2rem] border border-[var(--ss-neutral-100)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,247,245,0.98))] shadow-[0_28px_90px_-38px_rgba(26,25,23,0.35)]">
@@ -227,14 +229,12 @@ export function DocumentRenderer({ content, templateType }: Props): JSX.Element 
 
             case "heading":
               return block.level === 2 ? (
-                <div key={`heading-${index}`} className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.24em] text-[var(--ss-primary)]">
-                    Dokumentrubrik
-                  </p>
-                  <h2 className="text-2xl font-semibold tracking-tight text-[var(--ss-neutral-900)]">
-                    {block.text}
-                  </h2>
-                </div>
+                <h2
+                  key={`heading-${index}`}
+                  className="text-2xl font-semibold tracking-tight text-[var(--ss-neutral-900)]"
+                >
+                  {block.text}
+                </h2>
               ) : (
                 <h3
                   key={`heading-${index}`}
@@ -246,10 +246,28 @@ export function DocumentRenderer({ content, templateType }: Props): JSX.Element 
 
             case "section":
               return (
-                <div key={`section-${index}`} className="rounded-[1.4rem] bg-white/80 px-4 py-3 shadow-sm ring-1 ring-[var(--ss-neutral-100)]">
+                <div
+                  key={`section-${index}`}
+                  className="rounded-[1.4rem] bg-white/80 px-4 py-3 shadow-sm ring-1 ring-[var(--ss-neutral-100)]"
+                >
                   <h4 className="text-base font-semibold text-[var(--ss-neutral-900)]">
                     {renderInlineContent(block.text)}
                   </h4>
+                </div>
+              );
+
+            case "field":
+              return (
+                <div
+                  key={`field-${index}`}
+                  className="rounded-[1.5rem] border border-[var(--ss-neutral-100)] bg-white/90 px-4 py-4 shadow-sm"
+                >
+                  <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-[var(--ss-primary)]">
+                    {block.label}
+                  </p>
+                  <p className="mt-2 text-[0.97rem] leading-8 text-[var(--ss-neutral-800)]">
+                    {renderInlineContent(block.text)}
+                  </p>
                 </div>
               );
 

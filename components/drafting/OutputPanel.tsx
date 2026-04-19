@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { DocumentRenderer } from "@/components/drafting/DocumentRenderer";
+import { Button } from "@/components/ui/button";
+import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
 import type { TemplateType } from "@/types";
 
 interface Props {
@@ -12,13 +13,6 @@ interface Props {
   templateType: TemplateType;
 }
 
-const TEMPLATE_HEADINGS: Record<TemplateType, string> = {
-  incidentrapport: "Incidentrapport",
-  larlogg: "Lärlogg",
-  veckobrev: "Veckobrev",
-  custom: "Eget dokument",
-};
-
 export function OutputPanel({
   completion,
   isLoading,
@@ -26,6 +20,7 @@ export function OutputPanel({
   templateType,
 }: Props): JSX.Element {
   const [copyStatus, setCopyStatus] = useState<"idle" | "done" | "failed">("idle");
+  const templateInfo = TEMPLATE_DETAILS[templateType];
 
   const handleCopy = async () => {
     try {
@@ -44,7 +39,7 @@ export function OutputPanel({
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Färdigt dokument</p>
           <h2 className="mt-1 text-lg font-semibold text-[var(--ss-neutral-900)]">
-            {TEMPLATE_HEADINGS[templateType]}
+            {templateInfo.label}
           </h2>
         </div>
         <Button
@@ -81,8 +76,7 @@ export function OutputPanel({
               </p>
             </div>
             <div className="rounded-[1.5rem] bg-white p-4 text-sm leading-7 text-muted-foreground shadow-sm">
-              Klartexten här blir redo att kopiera direkt till ditt officiella dokument eller din
-              kommunikationskanal.
+              {templateInfo.emptyStateHint}
             </div>
           </div>
         ) : null}
@@ -96,9 +90,7 @@ export function OutputPanel({
           </div>
         ) : null}
 
-        {completion ? (
-          <DocumentRenderer content={completion} templateType={templateType} />
-        ) : null}
+        {completion ? <DocumentRenderer content={completion} templateType={templateType} /> : null}
       </div>
     </div>
   );
