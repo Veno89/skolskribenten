@@ -1,134 +1,138 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
-import { SignOutButton } from "@/components/auth/SignOutButton";
-import { Button } from "@/components/ui/button";
+import { DraftingHeader } from "@/components/drafting/DraftingHeader";
 import { OutputPanel } from "@/components/drafting/OutputPanel";
-import { TemplatePicker } from "@/components/drafting/TemplatePicker";
-import { UsageCounter } from "@/components/drafting/UsageCounter";
-import { GdprBadge } from "@/components/gdpr/GdprBadge";
 import { GdprNameInput } from "@/components/gdpr/GdprNameInput";
-import { useCompletion } from "@/hooks/useCompletion";
-import { GdprScrubber } from "@/lib/gdpr/scrubber";
+import { Button } from "@/components/ui/button";
+import { useDocumentGeneration } from "@/hooks/useDocumentGeneration";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
 import { parseUserSettings } from "@/lib/validations/user-settings";
-import type { Profile, ScrubberStats, TemplateType } from "@/types";
+import type { Profile } from "@/types";
 
-const scrubber = new GdprScrubber();
-const DEFAULT_TEMPLATE: TemplateType = "larlogg";
 const SCHOOL_LEVEL_LABELS = {
   "F-3": "F-3",
   "4-6": "4-6",
   "7-9": "7-9",
 } as const;
+
 const TONE_LABELS = {
   formal: "Formell ton",
   warm: "Varm ton",
 } as const;
-const FIRST_RUN_PLACEHOLDER = `Exempeltext: "Eleven hade svårt att sitta still under matematiklektionen och
-störde de andra eleverna tre gånger. Vi pratade efteråt och kom överens om att
-eleven ska sitta närmast tavlan nästa vecka. Elevens föräldrar informerades."
-
-Välj mall och klicka "Generera" - texten ovan är bara ett exempel, skriv din egen.`;
 
 interface Props {
   userProfile: Profile;
 }
 
 export function DraftingStation({ userProfile }: Props): JSX.Element {
-  const [rawInput, setRawInput] = useState("");
-  const [customNames, setCustomNames] = useState<string[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>(DEFAULT_TEMPLATE);
-  const [scrubberStats, setScrubberStats] = useState<ScrubberStats | null>(null);
-  const [unmatchedWarnings, setUnmatchedWarnings] = useState<string[]>([]);
   const userSettings = parseUserSettings(userProfile.user_settings);
+  const {
+    clearActiveDraft,
+    customNames,
+    hasSavedDraft,
+    rawInput,
+    savedAtLabel,
+    selectedTemplate,
+    switchTemplate,
+    updateCustomNames,
+    updateRawInput,
+  } = useDraftPersistence(userProfile.id);
+  const {
+    completion,
+    error,
+    generateDocument,
+    isLoading,
+    resetGenerationState,
+    scrubberStats,
+    unmatchedWarnings,
+  } = useDocumentGeneration();
+
   const activePreferences = [
     userSettings.schoolLevel ? `Årskurs ${SCHOOL_LEVEL_LABELS[userSettings.schoolLevel]}` : null,
     userSettings.preferredTone ? TONE_LABELS[userSettings.preferredTone] : null,
   ].filter((value): value is string => Boolean(value));
+  const selectedTemplateInfo = TEMPLATE_DETAILS[selectedTemplate];
 
-  const { complete, completion, isLoading, error } = useCompletion({
-    api: "/api/ai",
-  });
+  const handleTemplateChange = (nextTemplate: typeof selectedTemplate) => {
+    if (switchTemplate(nextTemplate)) {
+      resetGenerationState();
+    }
+  };
+
+  const handleClearDraft = () => {
+    clearActiveDraft();
+    resetGenerationState();
+  };
 
   const handleGenerate = async () => {
-    if (!rawInput.trim()) {
-      return;
-    }
-
-    const result = scrubber.scrub(rawInput, { customNames });
-
-    setScrubberStats(result.stats);
-    setUnmatchedWarnings(result.unmatchedCapitalized);
-
-    await complete("", {
-      body: {
-        templateType: selectedTemplate,
-        scrubbedInput: result.scrubbedText,
-        scrubberStats: result.stats,
-      },
+    await generateDocument({
+      customNames,
+      rawInput,
+      templateType: selectedTemplate,
     });
   };
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--ss-neutral-50)]">
-      <header className="ss-surface sticky top-0 z-10 flex flex-col gap-4 border-b border-white/80 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
-        <div className="space-y-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.26em] text-[var(--ss-primary)]">Skrivstation</p>
-            <h1 className="mt-1 text-2xl font-semibold text-[var(--ss-neutral-900)]">
-              Dokumentera med lugn och kontroll
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {activePreferences.length > 0
-                ? `Aktiva skrivinställningar: ${activePreferences.join(" · ")}.`
-                : "Lägg till skolnivå och ton i Inställningar för mer träffsäkra utkast."}
-            </p>
-          </div>
-          <TemplatePicker value={selectedTemplate} onChange={setSelectedTemplate} />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="rounded-full border-white/70 bg-white/80"
-          >
-            <Link href="/installningar">Inställningar</Link>
-          </Button>
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="rounded-full border-white/70 bg-white/80"
-          >
-            <Link href="/konto">Konto</Link>
-          </Button>
-          <SignOutButton
-            size="sm"
-            variant="outline"
-            className="rounded-full border-white/70 bg-white/80"
-          />
-          <UsageCounter profile={userProfile} />
-          <GdprBadge stats={scrubberStats} />
-        </div>
-      </header>
+      <DraftingHeader
+        activePreferences={activePreferences}
+        onTemplateChange={handleTemplateChange}
+        selectedTemplate={selectedTemplate}
+        stats={scrubberStats}
+        userProfile={userProfile}
+      />
 
       <div className="flex flex-1 flex-col lg:flex-row">
         <div className="flex w-full flex-col border-b border-[var(--ss-neutral-200)] lg:w-1/2 lg:border-b-0 lg:border-r">
           <div className="border-b border-[var(--ss-neutral-100)] bg-white px-4 py-3">
-            <span className="text-xs font-medium uppercase tracking-[0.24em] text-[var(--ss-neutral-800)]">
-              Dina anteckningar
-            </span>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-medium uppercase tracking-[0.24em] text-[var(--ss-neutral-800)]">
+                  Dina anteckningar
+                </span>
+                <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                  Aktiv mall: {selectedTemplateInfo.label}
+                </p>
+              </div>
+              <div className="rounded-full bg-[var(--ss-primary-light)] px-3 py-1 text-xs font-medium text-[var(--ss-primary-dark)]">
+                {selectedTemplateInfo.eyebrow}
+              </div>
+            </div>
           </div>
 
-          <GdprNameInput value={customNames} onChange={setCustomNames} />
+          <GdprNameInput value={customNames} onChange={updateCustomNames} />
+
+          <div className="border-b border-[var(--ss-neutral-100)] bg-white px-4 py-3">
+            <div className="flex flex-col gap-3 rounded-[1.25rem] border border-[var(--ss-neutral-100)] bg-[var(--ss-neutral-50)] px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-[var(--ss-neutral-900)]">
+                  Utkast sparas tillfälligt lokalt
+                </p>
+                <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                  {savedAtLabel
+                    ? `Senast sparat lokalt kl. ${savedAtLabel}. Utkastet är knutet till ditt konto på den här enheten och rensas när du loggar ut eller efter 12 timmar.`
+                    : "Skriv tryggt vidare. Utkastet sparas tillfälligt på den här enheten, knutet till ditt konto, och rensas när du loggar ut eller efter 12 timmar."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleClearDraft}
+                disabled={!hasSavedDraft}
+                className="rounded-full"
+              >
+                Rensa utkast
+              </Button>
+            </div>
+          </div>
 
           <textarea
             className="min-h-[24rem] flex-1 resize-none bg-[var(--ss-neutral-50)] px-4 py-5 text-sm leading-7 text-[var(--ss-neutral-900)] placeholder:text-[var(--ss-neutral-300)] focus:outline-none"
-            placeholder={FIRST_RUN_PLACEHOLDER}
+            placeholder={selectedTemplateInfo.placeholder}
             value={rawInput}
-            onChange={(event) => setRawInput(event.target.value)}
+            onChange={(event) => updateRawInput(event.target.value)}
           />
 
           {unmatchedWarnings.length > 0 ? (

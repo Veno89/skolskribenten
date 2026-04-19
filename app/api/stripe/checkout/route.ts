@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { isActivePro } from "@/lib/billing/entitlements";
 import { createStripeClient } from "@/lib/stripe/server";
+import { getAppUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 const CheckoutSchema = z.object({
@@ -34,9 +36,16 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("stripe_customer_id, email")
+    .select("email, stripe_customer_id, subscription_status, subscription_end_date")
     .eq("id", user.id)
     .single();
+
+  if (profile && isActivePro(profile)) {
+    return NextResponse.json(
+      { error: "Du har redan en aktiv Pro-plan på kontot." },
+      { status: 409 },
+    );
+  }
 
   let customerId = profile?.stripe_customer_id ?? null;
 
@@ -65,8 +74,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     line_items: [{ price: priceId, quantity: 1 }],
     payment_method_types: ["card", "swish"],
     locale: "sv",
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/konto?payment=success`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/konto?payment=cancelled`,
+    success_url: `${getAppUrl()}/konto?payment=success`,
+    cancel_url: `${getAppUrl()}/konto?payment=cancelled`,
     metadata: {
       supabase_user_id: user.id,
       price_type: parsed.data.priceType,

@@ -131,6 +131,18 @@ export default async function RegistreraPage({ searchParams }: Props): Promise<J
           Efter registrering skickar vi en bekräftelselänk till din e-postadress.
         </p>
 
+        <p className="text-xs leading-6 text-muted-foreground">
+          Genom att skapa konto godkänner du våra{" "}
+          <Link href="/anvandarvillkor" className="text-[var(--ss-primary)] hover:underline">
+            användarvillkor
+          </Link>{" "}
+          och kan läsa mer om hur vi hanterar kontodata i{" "}
+          <Link href="/integritetspolicy" className="text-[var(--ss-primary)] hover:underline">
+            integritetspolicyn
+          </Link>
+          .
+        </p>
+
         <AuthSubmitButton
           type="submit"
           idleLabel="Skapa konto"

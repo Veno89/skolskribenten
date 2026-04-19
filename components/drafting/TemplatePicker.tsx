@@ -1,5 +1,6 @@
 "use client";
 
+import { TEMPLATE_OPTIONS } from "@/lib/drafting/template-content";
 import { cn } from "@/lib/utils";
 import type { TemplateType } from "@/types";
 
@@ -8,21 +9,15 @@ interface Props {
   onChange: (templateType: TemplateType) => void;
 }
 
-const TEMPLATE_OPTIONS: Array<{ value: TemplateType; label: string }> = [
-  { value: "incidentrapport", label: "Incidentrapport" },
-  { value: "larlogg", label: "Lärlogg" },
-  { value: "veckobrev", label: "Veckobrev" },
-  { value: "custom", label: "Eget dokument" },
-];
-
 export function TemplatePicker({ value, onChange }: Props): JSX.Element {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Välj dokumentmall">
       {TEMPLATE_OPTIONS.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => onChange(option.value)}
+          aria-pressed={value === option.value}
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium transition-all",
             value === option.value

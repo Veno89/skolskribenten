@@ -1,16 +1,14 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { updateSettingsAction } from "@/app/(dashboard)/installningar/actions";
 import { AuthNotice } from "@/components/auth/AuthNotice";
 import { AuthSubmitButton } from "@/components/auth/AuthSubmitButton";
-import { SignOutButton } from "@/components/auth/SignOutButton";
-import { Button } from "@/components/ui/button";
+import { DashboardPageActions } from "@/components/dashboard/DashboardPageActions";
+import { MissingProfileState } from "@/components/dashboard/MissingProfileState";
 import { Input } from "@/components/ui/input";
 import {
   getNoticeFromSearchParams,
   type AuthSearchParams,
 } from "@/lib/auth/redirects";
-import { createClient } from "@/lib/supabase/server";
+import { loadDashboardProfile } from "@/lib/dashboard/load-dashboard-profile";
 import { cn } from "@/lib/utils";
 import { parseUserSettings } from "@/lib/validations/user-settings";
 
@@ -71,29 +69,10 @@ interface Props {
 }
 
 export default async function InstallningarPage({ searchParams }: Props): Promise<JSX.Element> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/logga-in?next=%2Finstallningar");
-  }
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const { profile, user } = await loadDashboardProfile({ nextPath: "/installningar" });
 
   if (!profile) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-16">
-        <div className="ss-card w-full p-8">
-          <h1 className="text-3xl font-semibold tracking-tight">Profil hittades inte</h1>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            Vi kunde inte läsa in ditt konto ännu. Kontrollera att Supabase-migreringarna är körda
-            och att profilen finns i tabellen <code>profiles</code>.
-          </p>
-        </div>
-      </main>
-    );
+    return <MissingProfileState />;
   }
 
   const notice = getNoticeFromSearchParams(searchParams);
@@ -114,15 +93,13 @@ export default async function InstallningarPage({ searchParams }: Props): Promis
             kontoinställningar som namn, skola och skrivpreferenser, aldrig rå elevdokumentation.
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild variant="outline" className="rounded-full">
-              <Link href="/skrivstation">Till skrivstationen</Link>
-            </Button>
-            <Button asChild variant="outline" className="rounded-full">
-              <Link href="/konto">Konto</Link>
-            </Button>
-            <SignOutButton className="rounded-full" />
-          </div>
+          <DashboardPageActions
+            className="mt-6"
+            links={[
+              { href: "/skrivstation", label: "Till skrivstationen" },
+              { href: "/konto", label: "Konto" },
+            ]}
+          />
 
           {notice ? (
             <div className="mt-6">

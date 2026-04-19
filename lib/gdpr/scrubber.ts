@@ -14,6 +14,10 @@ export interface ScrubberOptions {
   customNames?: string[];
 }
 
+interface CollectUnmatchedCapitalizedOptions {
+  ignoreSentenceInitialWords?: boolean;
+}
+
 const SAFE_CAPITALIZED_WORDS = new Set([
   "Måndag",
   "Tisdag",
@@ -106,7 +110,7 @@ export class GdprScrubber {
     return {
       scrubbedText: processed,
       replacements,
-      unmatchedCapitalized: collectUnmatchedCapitalized(processed),
+      unmatchedCapitalized: collectUnmatchedCapitalizedWords(processed),
       stats: {
         namesReplaced: replacedEntityKeys.size,
         piiTokensReplaced,
@@ -145,7 +149,11 @@ function buildNameList(customNames: string[] | undefined): string[] {
   return names.sort((left, right) => right.length - left.length);
 }
 
-function collectUnmatchedCapitalized(text: string): string[] {
+export function collectUnmatchedCapitalizedWords(
+  text: string,
+  options: CollectUnmatchedCapitalizedOptions = {},
+): string[] {
+  const ignoreSentenceInitialWords = options.ignoreSentenceInitialWords ?? true;
   const words = Array.from(
     text.matchAll(/\b[A-ZÅÄÖ][a-zåäö]{2,}\b/g),
     (match) => ({
@@ -161,6 +169,10 @@ function collectUnmatchedCapitalized(text: string): string[] {
 
     if (text[index - 1] === "[") {
       return false;
+    }
+
+    if (!ignoreSentenceInitialWords) {
+      return true;
     }
 
     return !isSentenceInitialWord(text, index);
