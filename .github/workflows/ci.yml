@@ -8,8 +8,14 @@ on:
 
 jobs:
   quality:
-    name: Type-check, lint & test
+    name: Type-check, lint, test and build
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_placeholder' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiJ9.placeholder' }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'sb_secret_placeholder' }}
+      NEXT_PUBLIC_APP_URL: https://skolskribenten.com
 
     steps:
       - uses: actions/checkout@v4
@@ -20,30 +26,20 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm tsc --noEmit
-        working-directory: apps/web
+        run: pnpm typecheck
 
       - name: Lint
         run: pnpm lint
-        working-directory: apps/web
 
-      - name: Unit tests — GDPR scrubber
+      - name: Unit tests
         run: pnpm test
-        working-directory: packages/gdpr-scrubber
 
       - name: Build
         run: pnpm build
-        working-directory: apps/web
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_APP_URL: https://skolskribent.se
-          # Note: SUPABASE_SERVICE_ROLE_KEY is intentionally excluded from build
-          # It is only needed at runtime in the webhook handler

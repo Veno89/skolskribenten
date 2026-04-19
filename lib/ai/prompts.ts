@@ -1,9 +1,17 @@
+import {
+  AI_ROLE_AND_SCOPE,
+  DOCUMENT_WRITING_RULES,
+  SWEDISH_SCHOOL_CONTEXT,
+} from "@/lib/ai/knowledge";
 import type { PromptTemplateType, TemplateType } from "@/lib/ai/provider";
 import type { UserSettings } from "@/lib/validations/user-settings";
 
 export const BASE_SYSTEM_PROMPT = `
-Du är en expert på pedagogisk dokumentation för svenska grundskolan.
-Du hjälper lärare att skriva professionella, korrekta och empatiska dokument.
+${AI_ROLE_AND_SCOPE}
+
+${SWEDISH_SCHOOL_CONTEXT}
+
+${DOCUMENT_WRITING_RULES}
 
 KRITISKA REGLER:
 - Skriv alltid på formell, korrekt svenska ("Myndighetssvenska")
@@ -47,7 +55,7 @@ Strukturera enligt:
 
 SPRÅKLIGA RIKTLINJER:
 - Positivt och framåtsyftande perspektiv (styrkebaserat)
-- Koppla till kunskapskrav och förmågor i Lgr22 - specificera ämne och relevant del av kursplanen
+- Koppla till kunskapskrav och förmågor i Lgr22 när det stöds av underlaget - hitta inte på exakta formuleringar eller referenser
 - Skriv i ett språk som är begripligt för både kollegor och vårdnadshavare
 `.trim(),
 
@@ -69,7 +77,7 @@ SPRÅKLIGA RIKTLINJER:
 - Fokus på gruppen, aldrig på enskilda individer
 - Tydligt och lättläst - undvik pedagogisk jargong
 - Avsluta med ett positivt budskap
-  `.trim(),
+`.trim(),
 };
 
 const SCHOOL_LEVEL_INSTRUCTIONS: Record<NonNullable<UserSettings["schoolLevel"]>, string> = {

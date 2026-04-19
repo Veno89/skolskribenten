@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { getSystemPrompt } from "../prompts";
 
 describe("getSystemPrompt", () => {
+  it("includes the teacher-focused role and Swedish school context", () => {
+    const prompt = getSystemPrompt("larlogg");
+
+    expect(prompt).toContain("Skolskribentens AI-assistent för svenska lärare i grundskolan");
+    expect(prompt).toContain("Lgr22 är relevant främst när läraren dokumenterar lärande");
+    expect(prompt).toContain("skriv inte som om elevhälsobedömningar redan är gjorda");
+  });
+
   it("appends teacher settings when they are available", () => {
     const prompt = getSystemPrompt("larlogg", {
       userSettings: {
