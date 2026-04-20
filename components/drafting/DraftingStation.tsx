@@ -75,7 +75,7 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--ss-neutral-50)]">
+    <div id="main-content" className="flex min-h-screen flex-col bg-[var(--ss-neutral-50)]">
       <DraftingHeader
         activePreferences={activePreferences}
         onTemplateChange={handleTemplateChange}

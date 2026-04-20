@@ -17,7 +17,15 @@ export default function RootLayout({
 }>): JSX.Element {
   return (
     <html lang="sv">
-      <body>{children}</body>
+      <body>
+        <a
+          href="#main-content"
+          className="sr-only fixed left-4 top-4 z-[1000] rounded-full bg-white px-4 py-2 text-sm font-medium text-[var(--ss-neutral-900)] shadow-lg focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-[var(--ss-primary)] focus:ring-offset-2"
+        >
+          Hoppa till innehållet
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

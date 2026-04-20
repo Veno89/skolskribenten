@@ -42,6 +42,11 @@ const RequestResetSchema = z.object({
   email: EmailSchema,
 });
 
+const ResendConfirmationSchema = z.object({
+  email: EmailSchema,
+  next: z.string().optional(),
+});
+
 const UpdatePasswordSchema = z
   .object({
     password: PasswordSchema,
@@ -111,7 +116,13 @@ export async function loginAction(formData: FormData): Promise<never> {
   });
 
   if (error) {
-    redirectWithMessage("/logga-in", { error: toFriendlyAuthError(error.message), next });
+    const isUnconfirmedEmail = error.message.toLowerCase().includes("email not confirmed");
+
+    redirectWithMessage("/logga-in", {
+      error: toFriendlyAuthError(error.message),
+      next,
+      resendEmail: isUnconfirmedEmail ? parsed.data.email : undefined,
+    });
   }
 
   revalidatePath("/", "layout");
@@ -160,6 +171,43 @@ export async function registerAction(formData: FormData): Promise<never> {
   redirectWithMessage("/logga-in", {
     success: "Kontot är skapat. Bekräfta din e-postadress och logga sedan in.",
     next,
+    resendEmail: parsed.data.email,
+  });
+}
+
+export async function resendConfirmationAction(formData: FormData): Promise<never> {
+  const parsed = ResendConfirmationSchema.safeParse({
+    email: getValue(formData, "email"),
+    next: getValue(formData, "next"),
+  });
+
+  const next = sanitizeNextPath(getValue(formData, "next"), DEFAULT_POST_AUTH_REDIRECT);
+
+  if (!parsed.success) {
+    redirectWithMessage("/logga-in", { error: getFirstIssue(parsed.error), next });
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: parsed.data.email,
+    options: {
+      emailRedirectTo: `${getAppUrl()}/auth/confirm?next=${encodeURIComponent(next)}`,
+    },
+  });
+
+  if (error) {
+    redirectWithMessage("/logga-in", {
+      error: toFriendlyAuthError(error.message),
+      next,
+      resendEmail: parsed.data.email,
+    });
+  }
+
+  redirectWithMessage("/logga-in", {
+    info: "Vi har skickat en ny bekräftelselänk. Kontrollera inkorgen och skräpposten.",
+    next,
+    resendEmail: parsed.data.email,
   });
 }
 

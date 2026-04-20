@@ -153,7 +153,7 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
   };
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-10 lg:px-8">
+    <main id="main-content" className="mx-auto min-h-screen max-w-6xl px-6 py-10 lg:px-8">
       <PlanningOnboardingPanel userId={userId} />
 
       <section className="ss-card p-6 md:p-8">
@@ -369,7 +369,7 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
         ) : null}
 
         <label className="mt-4 block text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          AI-underlag (för Skrivstationens "Eget dokument")
+          AI-underlag (för Skrivstationens &quot;Eget dokument&quot;)
         </label>
         <textarea
           readOnly

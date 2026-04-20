@@ -46,7 +46,7 @@ const transparencyPoints = [
 
 export default function LandingPage(): JSX.Element {
   return (
-    <main className="overflow-hidden bg-[var(--ss-neutral-50)] text-[var(--ss-neutral-900)]">
+    <main id="main-content" className="overflow-hidden bg-[var(--ss-neutral-50)] text-[var(--ss-neutral-900)]">
       <div className="absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(circle_at_top,rgba(74,127,165,0.18),transparent_55%)]" />
       <div className="absolute right-[-8rem] top-28 -z-10 h-72 w-72 rounded-full bg-[rgba(232,168,124,0.18)] blur-3xl" />
       <div className="absolute left-[-6rem] top-[34rem] -z-10 h-80 w-80 rounded-full bg-[rgba(107,171,144,0.14)] blur-3xl" />

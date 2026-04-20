@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { mergeCustomNames, parseCustomNamesInput } from "@/lib/gdpr/custom-names";
 
 interface Props {
   value: string[];
@@ -10,16 +11,11 @@ interface Props {
 export function GdprNameInput({ value, onChange }: Props): JSX.Element {
   const [inputValue, setInputValue] = useState("");
 
-  const addName = () => {
-    const trimmed = inputValue.trim();
+  const addNames = (rawValue: string = inputValue) => {
+    const parsedNames = parseCustomNamesInput(rawValue);
 
-    if (
-      trimmed &&
-      !value.some(
-        (name) => name.toLocaleLowerCase("sv-SE") === trimmed.toLocaleLowerCase("sv-SE"),
-      )
-    ) {
-      onChange([...value, trimmed]);
+    if (parsedNames.length > 0) {
+      onChange(mergeCustomNames(value, parsedNames));
     }
 
     setInputValue("");
@@ -33,7 +29,8 @@ export function GdprNameInput({ value, onChange }: Props): JSX.Element {
     <div className="border-b border-[var(--ss-neutral-200)] bg-[var(--ss-primary-light)] px-4 py-3">
       <p className="mb-2 text-xs leading-6 text-[var(--ss-neutral-800)]">
         <strong>Extra namn att skydda</strong> - lägg till namn som inte är vanliga svenska namn
-        (t.ex. Mohammed, Amir, Fatima)
+        (t.ex. Mohammed, Amir, Fatima). Du kan klistra in flera namn samtidigt med kommatecken
+        eller radbrytningar.
       </p>
       <div className="mb-2 flex flex-wrap gap-2">
         {value.map((name) => (
@@ -58,18 +55,26 @@ export function GdprNameInput({ value, onChange }: Props): JSX.Element {
           type="text"
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
+          onPaste={(event) => {
+            const pastedValue = event.clipboardData.getData("text");
+
+            if (parseCustomNamesInput(pastedValue).length > 1) {
+              event.preventDefault();
+              addNames(pastedValue);
+            }
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              addName();
+              addNames();
             }
           }}
-          placeholder="Skriv ett namn och tryck Enter"
+          placeholder="Skriv ett namn eller klistra in flera namn"
           className="flex-1 rounded-lg border border-[var(--ss-neutral-200)] bg-white px-3 py-2 text-xs focus:border-[var(--ss-primary)] focus:outline-none"
         />
         <button
           type="button"
-          onClick={addName}
+          onClick={() => addNames()}
           className="rounded-lg bg-[var(--ss-primary)] px-3 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90"
         >
           Lägg till

@@ -23,7 +23,7 @@ export default async function KontoPage({ searchParams }: Props): Promise<JSX.El
     paymentParam === "success" || paymentParam === "cancelled" ? paymentParam : null;
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-16 lg:px-8">
+    <main id="main-content" className="mx-auto min-h-screen max-w-6xl px-6 py-16 lg:px-8">
       <KontoClient profile={profile!} paymentStatus={paymentStatus} />
     </main>
   );

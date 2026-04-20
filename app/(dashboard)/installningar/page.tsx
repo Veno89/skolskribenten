@@ -76,7 +76,7 @@ export default async function InstallningarPage({ searchParams }: Props): Promis
   const preferredToneValue = userSettings.preferredTone ?? "";
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-16 lg:px-8">
+    <main id="main-content" className="mx-auto min-h-screen max-w-6xl px-6 py-16 lg:px-8">
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="ss-card p-8">
           <p className="text-sm uppercase tracking-[0.26em] text-[var(--ss-primary)]">Inställningar</p>

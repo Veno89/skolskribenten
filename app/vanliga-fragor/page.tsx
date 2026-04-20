@@ -29,7 +29,7 @@ const faqItems = [
   {
     question: "Kommer fler mallar?",
     answer:
-      "Ja. Lektionsplanering ligger redan som en kommande flik i dashboarden, och fler skolnära arbetsflöden kommer att prioriteras utifrån tester och feedback från riktiga användare.",
+      "Ja. Lektionsplanering finns nu som en egen arbetsyta i dashboarden, och fler skolnära arbetsflöden kommer att prioriteras utifrån tester och feedback från riktiga användare.",
   },
 ];
 
@@ -46,7 +46,7 @@ export default function VanligaFragorPage(): JSX.Element {
             key={item.question}
             className="ss-card group overflow-hidden rounded-[1.75rem] p-0"
           >
-            <summary className="cursor-pointer list-none px-6 py-5 text-lg font-semibold text-[var(--ss-neutral-900)] marker:hidden">
+            <summary className="cursor-pointer list-none px-6 py-5 text-lg font-semibold text-[var(--ss-neutral-900)] marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ss-primary)] focus-visible:ring-offset-2">
               <span className="flex items-center justify-between gap-4">
                 <span>{item.question}</span>
                 <span className="text-[var(--ss-primary)] transition-transform group-open:rotate-45">

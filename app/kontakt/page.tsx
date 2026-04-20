@@ -6,7 +6,7 @@ export default function KontaktPage(): JSX.Element {
     <ContentPageLayout
       eyebrow="Kontakt"
       title="Skicka en fråga utan att behöva leta efter rätt adress"
-      intro="Här kan du skriva vad du testar, vad som skaver eller vad du vill att Skolskribenten ska kunna längre fram. Formuläret öppnar ett färdigt e-postutkast till oss."
+      intro="Här kan du skriva vad du testar, vad som skaver eller vad du vill att Skolskribenten ska kunna längre fram. Formuläret skickas direkt till vår supportinkorg från appen."
     >
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <section className="ss-card p-8">
@@ -22,6 +22,7 @@ export default function KontaktPage(): JSX.Element {
               <p>Vilken mall du använde, till exempel Incidentrapport eller Unikum.</p>
               <p>Om något blev fel i texten, vad du skrev in och vad du hade hoppats få ut.</p>
               <p>Om det gäller betalning eller konto, vilket konto eller vilken e-post som används.</p>
+              <p>Om något är brådskande kan du också skriva direkt till kontakt@skolskribenten.com.</p>
             </div>
           </section>
 

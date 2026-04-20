@@ -10,7 +10,7 @@ interface Props {
 
 export function ContentPageLayout({ eyebrow, title, intro, children }: Props): JSX.Element {
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-14 lg:px-8">
+    <main id="main-content" className="mx-auto min-h-screen max-w-6xl px-6 py-14 lg:px-8">
       <div className="space-y-8">
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <Link href="/" className="transition-colors hover:text-[var(--ss-neutral-900)]">

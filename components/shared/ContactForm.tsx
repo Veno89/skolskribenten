@@ -4,50 +4,75 @@ import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { SUPPORT_TOPICS } from "@/lib/support/schema";
 
 const RECIPIENT = "kontakt@skolskribenten.com";
 
-function buildMailtoUrl(values: {
-  topic: string;
-  name: string;
-  email: string;
-  role: string;
-  message: string;
-}): string {
-  const subject = `[Skolskribenten] ${values.topic}`;
-  const body = [
-    `Namn: ${values.name}`,
-    `E-post: ${values.email}`,
-    `Roll/skolform: ${values.role || "[ej angivet]"}`,
-    "",
-    "Meddelande:",
-    values.message,
-  ].join("\n");
-
-  return `mailto:${RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
+type SubmissionState =
+  | { status: "idle" }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };
 
 export function ContactForm(): JSX.Element {
-  const [topic, setTopic] = useState("Allmän fråga");
+  const [topic, setTopic] = useState<(typeof SUPPORT_TOPICS)[number]>("Allmän fråga");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
   const [message, setMessage] = useState("");
-  const [opened, setOpened] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionState, setSubmissionState] = useState<SubmissionState>({ status: "idle" });
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const resetForm = () => {
+    setTopic("Allmän fråga");
+    setName("");
+    setEmail("");
+    setRole("");
+    setMessage("");
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setIsSubmitting(true);
+    setSubmissionState({ status: "idle" });
 
-    const mailtoUrl = buildMailtoUrl({
-      topic,
-      name,
-      email,
-      role,
-      message,
-    });
+    try {
+      const response = await fetch("/api/support", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          message,
+          name,
+          role,
+          topic,
+        }),
+      });
 
-    window.location.href = mailtoUrl;
-    setOpened(true);
+      const payload = (await response.json()) as { error?: string; message?: string };
+
+      if (!response.ok) {
+        setSubmissionState({
+          status: "error",
+          message: payload.error ?? "Vi kunde inte ta emot meddelandet just nu. Försök igen om en stund.",
+        });
+        return;
+      }
+
+      resetForm();
+      setSubmissionState({
+        status: "success",
+        message: payload.message ?? "Tack. Ditt meddelande är mottaget.",
+      });
+    } catch {
+      setSubmissionState({
+        status: "error",
+        message: "Vi kunde inte nå supportformuläret just nu. Försök igen om en stund.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -62,6 +87,7 @@ export function ContactForm(): JSX.Element {
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
+            disabled={isSubmitting}
             className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
           />
         </div>
@@ -79,6 +105,7 @@ export function ContactForm(): JSX.Element {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
+            disabled={isSubmitting}
             className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
           />
         </div>
@@ -95,14 +122,15 @@ export function ContactForm(): JSX.Element {
           <select
             id="contact-topic"
             value={topic}
-            onChange={(event) => setTopic(event.target.value)}
+            onChange={(event) => setTopic(event.target.value as (typeof SUPPORT_TOPICS)[number])}
+            disabled={isSubmitting}
             className="flex h-12 w-full rounded-2xl border border-input bg-[var(--ss-neutral-50)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <option>Allmän fråga</option>
-            <option>Feedback från testning</option>
-            <option>Tekniskt problem</option>
-            <option>Pris eller abonnemang</option>
-            <option>Samarbete eller demo</option>
+            {SUPPORT_TOPICS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -115,6 +143,7 @@ export function ContactForm(): JSX.Element {
             value={role}
             onChange={(event) => setRole(event.target.value)}
             placeholder="Till exempel klasslärare åk 4 eller biträdande rektor"
+            disabled={isSubmitting}
             className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
           />
         </div>
@@ -132,6 +161,7 @@ export function ContactForm(): JSX.Element {
           value={message}
           onChange={(event) => setMessage(event.target.value)}
           required
+          disabled={isSubmitting}
           rows={7}
           className="rounded-[1.5rem] bg-[var(--ss-neutral-50)]"
           placeholder="Berätta gärna vad du testar, vad som fungerade och vad som känns oklart."
@@ -140,17 +170,29 @@ export function ContactForm(): JSX.Element {
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm leading-7 text-muted-foreground">
-          Formuläret öppnar ett färdigt e-postutkast i din vanliga e-postklient. Vi sparar inte
-          innehållet i appen.
+          Formuläret skickas till vår server och läggs i supportinkorgen utan att du behöver en lokal
+          e-postklient. Du kan fortfarande skriva direkt till {RECIPIENT} om du föredrar vanlig e-post.
         </p>
-        <Button type="submit" className="rounded-full px-6">
-          Öppna e-postutkast
+        <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
+          {isSubmitting ? "Skickar..." : "Skicka meddelande"}
         </Button>
       </div>
 
-      {opened ? (
-        <div className="rounded-[1.25rem] border border-[var(--ss-secondary)] bg-[var(--ss-secondary-light)] px-4 py-3 text-sm text-[var(--ss-neutral-900)]">
-          E-postutkastet öppnades. Om inget hände kan du också skriva direkt till {RECIPIENT}.
+      {submissionState.status === "success" ? (
+        <div
+          aria-live="polite"
+          className="rounded-[1.25rem] border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+        >
+          {submissionState.message}
+        </div>
+      ) : null}
+
+      {submissionState.status === "error" ? (
+        <div
+          aria-live="polite"
+          className="rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          {submissionState.message}
         </div>
       ) : null}
     </form>

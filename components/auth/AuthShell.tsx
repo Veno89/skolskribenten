@@ -16,7 +16,7 @@ export function AuthShell({
   footer,
 }: Props): JSX.Element {
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl items-center px-6 py-16 lg:px-8">
+    <main id="main-content" className="mx-auto flex min-h-screen max-w-6xl items-center px-6 py-16 lg:px-8">
       <div className="grid w-full gap-8 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="ss-card ss-grid overflow-hidden p-8 md:p-10">
           <p className="text-sm uppercase tracking-[0.3em] text-[var(--ss-primary)]">Skolskribenten</p>
