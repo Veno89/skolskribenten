@@ -1,7 +1,9 @@
 import {
   AI_ROLE_AND_SCOPE,
   DOCUMENT_WRITING_RULES,
+  SWEDISH_POLICY_AND_PLANNING_CONTEXT,
   SWEDISH_SCHOOL_CONTEXT,
+  TRANSFORMATION_QUALITY_RULES,
 } from "@/lib/ai/knowledge";
 import type { TemplateType } from "@/lib/ai/provider";
 import type { UserSettings } from "@/lib/validations/user-settings";
@@ -11,7 +13,11 @@ ${AI_ROLE_AND_SCOPE}
 
 ${SWEDISH_SCHOOL_CONTEXT}
 
+${SWEDISH_POLICY_AND_PLANNING_CONTEXT}
+
 ${DOCUMENT_WRITING_RULES}
+
+${TRANSFORMATION_QUALITY_RULES}
 
 KRITISKA REGLER:
 - Skriv alltid på formell, korrekt svenska ("Myndighetssvenska")
@@ -45,6 +51,7 @@ SPRÅKLIGA RIKTLINJER:
 - Beskriv vad som observerades, inte tolkningar av motiv eller personlighet
 - Skriv i dåtid
 - Gör texten lätt att kopiera och klistra in i DF Respons eller motsvarande arbetsflöde
+- Om lärarens input redan är flytande text: strukturera om den tydligt och kondensera språket, inte bara omformulera mening för mening
 `.trim(),
 
   larlogg: `
@@ -131,6 +138,26 @@ FORMATERING:
 SPRÅKLIGA RIKTLINJER:
 - Håll en professionell, saklig och tydlig ton anpassad för dokumentation i skolmiljö.
 - Följ alltid beställningens detaljerade avsikter (skrubbad input).
+
+OM LÄRARENS ÖNSKEMÅL GÄLLER NÅGON AV DESSA TYPER, ANVÄND FÖRESLAGEN STRUKTUR:
+- Lektionsplanering:
+  Lektionsmål: ...
+  Koppling till syfte/centralt innehåll: ...
+  Upplägg steg för steg: ...
+  Anpassningar och stöd: ...
+  Bedömning/uppföljning: ...
+- Vikarieanteckning:
+  Grupp och sammanhang: ...
+  Dagens plan i ordning: ...
+  Viktigt för trygghet/studiero: ...
+  Anpassningar och elevbehov att känna till: ...
+  Praktiskt/checklista till vikarie: ...
+- Pedagogisk kartläggning (exempelunderlag):
+  Observerade styrkor: ...
+  Observerade hinder i lärmiljön: ...
+  Gjorda anpassningar: ...
+  Effekt hittills: ...
+  Förslag på fortsatt kartläggning: ...
 `.trim(),
 };
 
