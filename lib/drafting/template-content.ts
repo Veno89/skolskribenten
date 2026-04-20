@@ -67,12 +67,13 @@ Välj Veckobrev och klicka "Generera" för att få en färdig text till vårdnad
     label: "Eget dokument",
     pickerLabel: "Eget dokument",
     eyebrow: "Fritt utkast",
-    summary: "Ett mer öppet dokumentläge när du behöver ett professionellt utkast utan fast mall.",
+    summary:
+      "Ett mer öppet dokumentläge för t.ex. lektionsplanering, vikarieanteckningar eller underlag till pedagogisk kartläggning.",
     cardDescription:
-      "Flexibelt läge för sammanfattningar, minnesanteckningar och andra skolrelaterade dokumentutkast.",
+      "Flexibelt läge för sammanfattningar, planeringar och andra skolrelaterade dokumentutkast när de fasta mallarna inte räcker.",
     emptyStateHint:
       "Här visas ett bearbetat utkast som du kan kopiera vidare till ditt eget arbetsflöde.",
-    placeholder: `Exempeltext: "Efter samtalet med eleven och vårdnadshavare kom vi överens om att följa upp arbetsron om två veckor. Eleven uttryckte att instruktionerna ibland känns otydliga vid längre uppgifter och önskar tätare avstämningar."
+    placeholder: `Exempeltext: "Jag behöver en vikarieanteckning för klass 5A i morgon. Matematik först (bråk s. 34–35), sedan läsning i par. Två elever behöver extra tydliga startinstruktioner och korta avstämningar efter 10 minuter."
 
 Välj Eget dokument och klicka "Generera" för att få ett sakligt och användbart utkast.`,
   },

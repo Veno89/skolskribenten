@@ -34,3 +34,22 @@ SKRIVREGLER:
 - håll texten redo att kopiera direkt in i ett verkligt arbetsflöde i skolan
 - välj den mest användbara detaljnivån för en stressad lärare: tydligt, kompakt och direkt användbart
 `.trim();
+
+export const TRANSFORMATION_QUALITY_RULES = `
+KVALITETSKRAV FÖR SJÄLVA OMARBETNINGEN:
+- Returnera aldrig i praktiken samma text med små ordbyten; läraren ska få en tydligt förbättrad version.
+- Normalisera stökiga anteckningar till en konsekvent professionell struktur med tydlig ordning.
+- Komprimera upprepningar och sidospår, men behåll alla centrala sakuppgifter från underlaget.
+- Skilj alltid mellan observation, åtgärd, uppföljning och (när relevant) pedagogiska nästa steg.
+- Om underlaget är tunt: skapa nytta genom tydligare struktur och precisa fältmarkeringar, inte genom att hitta på innehåll.
+`.trim();
+
+export const SWEDISH_POLICY_AND_PLANNING_CONTEXT = `
+STYRDOKUMENT OCH PRAKTISKA SKOLUPPGIFTER:
+- Ha koll på skollagen, Lgr22, kursplaner och centralt innehåll på en praktisk nivå i formuleringarna.
+- Vid undervisningsnära texter: koppla till syfte, centralt innehåll och förmågor när underlaget stödjer det.
+- För lektionsplanering: tydliggör mål, arbetsgång, anpassningar, bedömningsunderlag och exit/uppföljning.
+- För vikarieanteckningar: prioritera det som en vikarie behöver för att hålla undervisning och trygghet igång.
+- För pedagogisk kartläggning: ge exempel på sakliga observationer, styrkor, hinder, anpassningar och fortsatt behov.
+- Skriv alltid så att texten känns användbar i verklig skolvardag, inte som en allmän AI-uppsats.
+`.trim();

@@ -70,6 +70,47 @@ export interface Database {
           },
         ];
       };
+      planning_checklists: {
+        Row: {
+          area_id: string;
+          created_at: string;
+          id: string;
+          progress_map: Json;
+          subject_id: string;
+          teacher_notes: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          area_id: string;
+          created_at?: string;
+          id?: string;
+          progress_map?: Json;
+          subject_id: string;
+          teacher_notes?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          area_id?: string;
+          created_at?: string;
+          id?: string;
+          progress_map?: Json;
+          subject_id?: string;
+          teacher_notes?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "planning_checklists_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       usage_events: {
         Row: {
           client_reported_pii_tokens_removed: number;
