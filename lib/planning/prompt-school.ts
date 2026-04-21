@@ -23,8 +23,8 @@ export const PLANNING_ONBOARDING_STEPS = [
   },
   {
     id: "copy_ai_prompt",
-    title: "Kopiera AI-underlag",
-    description: "Klistra in i Skrivstationens Eget dokument för konkreta lektionsförslag.",
+    title: "Generera eller kopiera AI-underlag",
+    description: "Generera direkt här eller klistra in i Skrivstationens Eget dokument för nästa lektionssteg.",
   },
 ] as const;
 

@@ -16,6 +16,9 @@ Implemented since the older audit documents:
 - The stale "coming soon" lektionsplanering copy has been removed from `app/vanliga-fragor/page.tsx`.
 - A skip link and small FAQ keyboard/focus improvements are now in place.
 - Route/middleware coverage now exists for `app/api/ai/route.ts`, `app/api/planning/checklist/route.ts`, `app/api/stripe/checkout/route.ts`, `app/api/stripe/portal/route.ts`, `app/api/webhooks/stripe/route.ts`, `app/api/support/route.ts`, `lib/supabase/middleware.ts`, and `middleware.ts`.
+- The settings page has been split so `app/(dashboard)/installningar/page.tsx` now just loads data and renders `components/dashboard/settings/SettingsPageContent.tsx`.
+- `hooks/useDocumentGeneration.ts` no longer shares a module-level `GdprScrubber` instance across the app runtime.
+- The unused `@radix-ui/react-tooltip` dependency has been removed from `package.json` and `pnpm-lock.yaml`.
 
 ## Remaining Work
 
@@ -39,9 +42,6 @@ What to do:
 
 ### 3. Clean up the remaining low-priority technical debt from the older audits
 Still open:
-- `@radix-ui/react-tooltip` remains in `package.json` / `pnpm-lock.yaml` without active usage.
-- `app/(dashboard)/installningar/page.tsx` is still a large inline page component and could be split if it keeps growing.
-- `hooks/useDocumentGeneration.ts` still uses a module-level `GdprScrubber` instance.
 - `lib/stripe/server.ts` still hardcodes and force-casts the Stripe API version.
 - Local draft persistence is still fixed behavior rather than a user-controlled privacy preference.
 

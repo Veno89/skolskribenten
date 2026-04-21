@@ -1,18 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useCompletion } from "@/hooks/useCompletion";
 import { GdprScrubber } from "@/lib/gdpr/scrubber";
 import type { ScrubberStats, TemplateType } from "@/types";
 
-const scrubber = new GdprScrubber();
-
 export function useDocumentGeneration() {
+  const scrubberRef = useRef<GdprScrubber>();
   const [scrubberStats, setScrubberStats] = useState<ScrubberStats | null>(null);
   const [unmatchedWarnings, setUnmatchedWarnings] = useState<string[]>([]);
   const { complete, completion, error, isLoading, reset } = useCompletion({
     api: "/api/ai",
   });
+
+  const getScrubber = () => {
+    if (!scrubberRef.current) {
+      scrubberRef.current = new GdprScrubber();
+    }
+
+    return scrubberRef.current;
+  };
 
   const resetGenerationState = () => {
     setScrubberStats(null);
@@ -29,7 +36,9 @@ export function useDocumentGeneration() {
       return;
     }
 
-    const result = scrubber.scrub(params.rawInput, { customNames: params.customNames });
+    const result = getScrubber().scrub(params.rawInput, {
+      customNames: params.customNames,
+    });
 
     setScrubberStats(result.stats);
     setUnmatchedWarnings(result.unmatchedCapitalized);

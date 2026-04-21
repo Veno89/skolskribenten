@@ -3,6 +3,7 @@ node_modules/
 .env.local
 .env*.local
 .tmp/
+supabase/.temp/
 coverage/
 dist/
 out/

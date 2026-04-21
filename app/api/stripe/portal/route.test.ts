@@ -23,6 +23,10 @@ vi.mock("@/lib/stripe/server", () => ({
   }),
 }));
 
+vi.mock("@/lib/supabase/config", () => ({
+  getAppUrl: () => "http://localhost:3000",
+}));
+
 function createProfileSelectChain(profile: unknown) {
   return {
     eq: vi.fn().mockReturnValue({

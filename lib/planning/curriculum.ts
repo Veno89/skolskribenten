@@ -1,6 +1,15 @@
-export type PlanningGradeBand = "7-9";
+export const PLANNING_GRADE_BANDS = ["F-3", "4-6", "7-9"] as const;
 
-export type PlanningSubjectId = "historia" | "religion" | "samhallskunskap";
+export type PlanningGradeBand = (typeof PLANNING_GRADE_BANDS)[number];
+
+export type PlanningSubjectId =
+  | "historia"
+  | "religion"
+  | "samhallskunskap"
+  | "svenska"
+  | "matematik"
+  | "engelska"
+  | "biologi";
 
 export interface CurriculumItem {
   id: string;
@@ -23,6 +32,141 @@ export interface SubjectCurriculum {
 }
 
 export const SUBJECT_CURRICULUM: SubjectCurriculum[] = [
+  {
+    id: "svenska",
+    label: "Svenska",
+    gradeBand: "F-3",
+    areas: [
+      {
+        id: "las-och-skrivstart",
+        title: "Läs- och skrivstart",
+        description:
+          "Kartläggning av tidiga undervisningsspår i svenska för att bygga avkodning, språkförståelse och skrivlust i F-3.",
+        items: [
+          {
+            id: "sv-f3-fonologisk-medvetenhet",
+            label: "Fonologisk medvetenhet, bokstavskännedom och koppling mellan ljud och bokstav",
+            guidance:
+              "Varva gemensamma språklekspass med korta, tydliga övningar där eleverna får höra, säga och skriva.",
+          },
+          {
+            id: "sv-f3-lasstrategier",
+            label: "Enkla lässtrategier före, under och efter läsning av elevnära texter",
+            guidance:
+              "Modellera hur man förutspår, ställer frågor och sammanfattar med stöd av bilder och samtal.",
+          },
+          {
+            id: "sv-f3-skriva-enkla-texter",
+            label: "Att skriva enkla berättande och faktainriktade texter med stödstrukturer",
+            guidance:
+              "Arbeta med gemensamt skrivande, bildstöd och tydliga textmallar innan eleverna skriver mer självständigt.",
+          },
+          {
+            id: "sv-f3-muntlig-framstallning",
+            label: "Muntligt berättande, återberättande och samtal i olika sammanhang",
+            guidance:
+              "Planera in EPA, bildsamtal och återberättande där eleverna tränar turtagning och tydlighet.",
+          },
+          {
+            id: "sv-f3-respons",
+            label: "Respons och bearbetning av texter med fokus på innehåll, ordval och enkel struktur",
+            guidance:
+              "Låt eleverna få kort, konkret respons och pröva att förbättra en sak i taget.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "matematik",
+    label: "Matematik",
+    gradeBand: "4-6",
+    areas: [
+      {
+        id: "brak-och-representationer",
+        title: "Bråk, decimaltal och representationer",
+        description:
+          "Översikt över centrala innehållsspår i matematik 4-6 kopplade till taluppfattning, representationer och resonemang.",
+        items: [
+          {
+            id: "ma-46-brak-begrepp",
+            label: "Bråk som del av helhet, del av antal och tal på tallinjen",
+            guidance:
+              "Växla mellan konkret material, bilder och symboler så att eleverna möter samma idé i flera representationer.",
+          },
+          {
+            id: "ma-46-jamfora-tal",
+            label: "Jämföra och ordna bråk, decimaltal och enkla procentuttryck",
+            guidance:
+              "Låt eleverna motivera jämförelser muntligt och skriftligt med stöd av tallinje och modeller.",
+          },
+          {
+            id: "ma-46-raknestrategier",
+            label: "Strategier och metoder för beräkningar med rationella tal i elevnära uppgifter",
+            guidance:
+              "Synliggör flera lösningsvägar och diskutera när olika metoder är effektiva eller mindre effektiva.",
+          },
+          {
+            id: "ma-46-problemlosning",
+            label: "Problemlösning där eleverna väljer metod, prövar och omprövar",
+            guidance:
+              "Ge problem med låg tröskel och hög takhöjd där eleverna får förklara hur de tänker och varför.",
+          },
+          {
+            id: "ma-46-resonemang-kommunikation",
+            label: "Matematiska resonemang och kommunikation med begrepp, bilder och symboler",
+            guidance:
+              "Bygg in stopp för kamratförklaringar, exit tickets och korta resonemang i helklass.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "engelska",
+    label: "Engelska",
+    gradeBand: "4-6",
+    areas: [
+      {
+        id: "muntlig-kommunikation",
+        title: "Muntlig kommunikation och strategier",
+        description:
+          "Planeringsstöd för engelska 4-6 med fokus på att förstå, våga uttrycka sig och använda kommunikativa strategier.",
+        items: [
+          {
+            id: "en-46-lyssna-forsta",
+            label: "Lyssna och förstå tydligt talad engelska i elevnära situationer",
+            guidance:
+              "Arbeta med korta hörövningar, upprepning och tydliga lyssnaruppdrag som fångar huvudbudskap och detaljer.",
+          },
+          {
+            id: "en-46-muntlig-produktion",
+            label: "Muntlig produktion i vardagliga och bekanta ämnesområden",
+            guidance:
+              "Ge eleverna fraser, samtalsstöd och trygg repetition innan mer fria samtal eller redovisningar.",
+          },
+          {
+            id: "en-46-strategier",
+            label: "Strategier för att göra sig förstådd och förstå andra när språket inte räcker till",
+            guidance:
+              "Modellera omskrivningar, följdfrågor, kroppsspråk och hur man ber om förtydligande.",
+          },
+          {
+            id: "en-46-texter-medier",
+            label: "Möte med sånger, filmer, dialoger och andra elevnära texter i olika medier",
+            guidance:
+              "Koppla innehållet till intresseväckande teman där eleverna både lyssnar, läser och reagerar på innehåll.",
+          },
+          {
+            id: "en-46-anpassa-sprak",
+            label: "Anpassa språk och uttryck efter mottagare, situation och syfte",
+            guidance:
+              "Låt eleverna öva på samma budskap i olika sammanhang, till exempel fråga, berätta och instruera.",
+          },
+        ],
+      },
+    ],
+  },
   {
     id: "historia",
     label: "Historia",
@@ -158,10 +302,59 @@ export const SUBJECT_CURRICULUM: SubjectCurriculum[] = [
       },
     ],
   },
+  {
+    id: "biologi",
+    label: "Biologi",
+    gradeBand: "7-9",
+    areas: [
+      {
+        id: "ekologi-och-hallbarhet",
+        title: "Ekologi och hållbar utveckling",
+        description:
+          "Översiktlig kontroll av vanliga innehållsspår i biologi 7-9 kring ekosystem, samband i naturen och hållbarhetsfrågor.",
+        items: [
+          {
+            id: "bi-79-ekosystem",
+            label: "Samband i ekosystem mellan organismer, näringskedjor och näringsvävar",
+            guidance:
+              "Låt eleverna undersöka hur förändringar i en del av ett system påverkar andra delar och motivera sina slutsatser.",
+          },
+          {
+            id: "bi-79-faltstudier",
+            label: "Fältstudier, observationer och dokumentation av naturmiljöer",
+            guidance:
+              "Planera in praktiska inslag där eleverna samlar data, jämför resultat och tränar biologiska begrepp i verkliga miljöer.",
+          },
+          {
+            id: "bi-79-manniskans-paverkan",
+            label: "Människans påverkan på naturen och hur val i samhället kan kopplas till hållbar utveckling",
+            guidance:
+              "Arbeta med aktuella fall där eleverna får väga miljömässiga, sociala och ekonomiska perspektiv mot varandra.",
+          },
+          {
+            id: "bi-79-biologiska-begrepp",
+            label: "Användning av biologiska begrepp, modeller och förklaringar i resonemang",
+            guidance:
+              "Bygg upp undervisningen så att eleverna får gå från vardagsspråk till mer ämnesspecifika förklaringar med stödstrukturer.",
+          },
+          {
+            id: "bi-79-atgarder-framtid",
+            label: "Diskussion om åtgärder, ansvar och framtida handlingsalternativ i hållbarhetsfrågor",
+            guidance:
+              "Ge uppgifter där eleverna jämför olika lösningar och motiverar vilka konsekvenser de kan få på kort och lång sikt.",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 export function getSubjectCurriculum(subjectId: PlanningSubjectId): SubjectCurriculum | undefined {
   return SUBJECT_CURRICULUM.find((subject) => subject.id === subjectId);
+}
+
+export function getSubjectsForGradeBand(gradeBand: PlanningGradeBand): SubjectCurriculum[] {
+  return SUBJECT_CURRICULUM.filter((subject) => subject.gradeBand === gradeBand);
 }
 
 export function getPlanningArea(subjectId: PlanningSubjectId, areaId: string): PlanningArea | undefined {

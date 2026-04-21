@@ -6,7 +6,8 @@ import {
   getDefaultStatusMap,
 } from "@/lib/planning/gap-analysis";
 
-const area = SUBJECT_CURRICULUM[0].areas[0];
+const subject = SUBJECT_CURRICULUM.find((candidate) => candidate.id === "historia") ?? SUBJECT_CURRICULUM[0];
+const area = subject.areas[0];
 
 describe("planning gap analysis", () => {
   it("builds default map with all items as not started", () => {
@@ -32,8 +33,9 @@ describe("planning gap analysis", () => {
     expect(result.missingItems).toHaveLength(2);
   });
 
-  it("creates AI underlag prompt including statuses and notes", () => {
+  it("creates a structured planning prompt with subject context and render-friendly sections", () => {
     const prompt = buildPlanningPrompt({
+      subject,
       area,
       progressMap: {
         [area.items[0].id]: "done",
@@ -41,8 +43,11 @@ describe("planning gap analysis", () => {
       teacherNotes: "Eleverna behöver mer stöd i källkritik.",
     });
 
-    expect(prompt).toContain("Jag undervisar inom området");
+    expect(prompt).toContain("Jag planerar undervisning i Historia för 7-9.");
     expect(prompt).toContain("Eleverna behöver mer stöd i källkritik.");
-    expect(prompt).toContain(": done");
+    expect(prompt).toContain("## Planeringsöversikt");
+    expect(prompt).toContain("**Lektionsmål**");
+    expect(prompt).toContain("> Lägg till en kort notis");
+    expect(prompt).toContain("Genomfört");
   });
 });

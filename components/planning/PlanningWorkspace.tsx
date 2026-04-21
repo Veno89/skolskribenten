@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEventHandler, useMemo, useState } from "react";
+import { DocumentRenderer } from "@/components/drafting/DocumentRenderer";
 import { PlanningOnboardingPanel } from "@/components/planning/PlanningOnboardingPanel";
 import { Button } from "@/components/ui/button";
 import { useCompletion } from "@/hooks/useCompletion";
@@ -13,7 +14,10 @@ import {
 import {
   getPlanningArea,
   getSubjectCurriculum,
+  getSubjectsForGradeBand,
+  PLANNING_GRADE_BANDS,
   SUBJECT_CURRICULUM,
+  type PlanningGradeBand,
   type PlanningSubjectId,
 } from "@/lib/planning/curriculum";
 import { buildPlanningPrompt, type ChecklistStatus } from "@/lib/planning/gap-analysis";
@@ -30,8 +34,13 @@ const STATUS_OPTIONS: Array<{ value: ChecklistStatus; label: string }> = [
 ];
 
 export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Element {
+  const [gradeBand, setGradeBand] = useState<PlanningGradeBand>("7-9");
   const [subjectId, setSubjectId] = useState<PlanningSubjectId>("historia");
-  const subject = getSubjectCurriculum(subjectId) ?? SUBJECT_CURRICULUM[0];
+  const availableSubjects = useMemo(() => getSubjectsForGradeBand(gradeBand), [gradeBand]);
+  const subject =
+    availableSubjects.find((candidate) => candidate.id === subjectId) ??
+    availableSubjects[0] ??
+    SUBJECT_CURRICULUM[0];
   const [areaId, setAreaId] = useState<string>(subject.areas[0]?.id ?? "");
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
@@ -64,6 +73,7 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
   });
 
   const aiPrompt = buildPlanningPrompt({
+    subject,
     area: activeArea,
     progressMap,
     teacherNotes,
@@ -74,14 +84,29 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
     completion: directCompletion,
     error: directError,
     isLoading: isDirectLoading,
+    reset: resetDirectCompletion,
   } = useCompletion({ api: "/api/ai" });
 
-  const handleSubjectChange = (value: string) => {
-    const nextSubject = (SUBJECT_CURRICULUM.find((candidate) => candidate.id === value) ??
-      SUBJECT_CURRICULUM[0]) as (typeof SUBJECT_CURRICULUM)[number];
+  const handleGradeBandChange = (value: string) => {
+    const nextGradeBand = (PLANNING_GRADE_BANDS.find((candidate) => candidate === value) ??
+      PLANNING_GRADE_BANDS[0]) as PlanningGradeBand;
+    const nextSubjects = getSubjectsForGradeBand(nextGradeBand);
+    const nextSubject = nextSubjects[0] ?? SUBJECT_CURRICULUM[0];
 
+    setGradeBand(nextGradeBand);
     setSubjectId(nextSubject.id);
     setAreaId(nextSubject.areas[0]?.id ?? "");
+    resetDirectCompletion();
+  };
+
+  const handleSubjectChange = (value: string) => {
+    const nextSubject = (getSubjectCurriculum(value as PlanningSubjectId) ??
+      SUBJECT_CURRICULUM[0]) as (typeof SUBJECT_CURRICULUM)[number];
+
+    setGradeBand(nextSubject.gradeBand);
+    setSubjectId(nextSubject.id);
+    setAreaId(nextSubject.areas[0]?.id ?? "");
+    resetDirectCompletion();
   };
 
   const handleCopyPrompt = async () => {
@@ -91,7 +116,9 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
 
     try {
       await window.navigator.clipboard.writeText(aiPrompt);
-      window.alert("AI-underlaget kopierades. Klistra in det i Skrivstationen (Eget dokument).");
+      window.alert(
+        "AI-underlaget kopierades. Klistra in det i Skrivstationen (Eget dokument) eller generera direkt här.",
+      );
     } catch {
       window.alert("Kunde inte kopiera automatiskt. Markera texten och kopiera manuellt.");
     }
@@ -111,6 +138,19 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
       });
     } catch {
       // Hook already exposes error state.
+    }
+  };
+
+  const handleCopyGeneratedPlan = async () => {
+    if (typeof window === "undefined" || !directCompletion) {
+      return;
+    }
+
+    try {
+      await window.navigator.clipboard.writeText(directCompletion);
+      window.alert("Planeringsförslaget kopierades.");
+    } catch {
+      window.alert("Kunde inte kopiera planeringsförslaget automatiskt.");
     }
   };
 
@@ -215,7 +255,7 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
         {cloudSyncEnabled ? (
           <div className="mt-2 rounded-xl border border-[var(--ss-neutral-200)] bg-[var(--ss-neutral-50)] px-3 py-2 text-xs text-muted-foreground">
             <p>
-              Senast synkad: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString("sv-SE") : "ingen synk ännu"}
+              Senast synkad: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString("sv-SE") : "ingen synk än"}
             </p>
             {syncLog.length > 0 ? (
               <ul className="mt-1 list-disc pl-4">
@@ -242,7 +282,22 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <label className="text-sm">
+            <span className="mb-1 block font-medium text-[var(--ss-neutral-900)]">Årsspann</span>
+            <select
+              className="h-11 w-full rounded-xl border border-[var(--ss-neutral-200)] bg-white px-3 text-sm"
+              value={gradeBand}
+              onChange={(event) => handleGradeBandChange(event.target.value)}
+            >
+              {PLANNING_GRADE_BANDS.map((candidate) => (
+                <option key={candidate} value={candidate}>
+                  {candidate}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="text-sm">
             <span className="mb-1 block font-medium text-[var(--ss-neutral-900)]">Ämne</span>
             <select
@@ -250,9 +305,9 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
               value={subject.id}
               onChange={(event) => handleSubjectChange(event.target.value)}
             >
-              {SUBJECT_CURRICULUM.map((candidate) => (
+              {availableSubjects.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  {candidate.label} ({candidate.gradeBand})
+                  {candidate.label}
                 </option>
               ))}
             </select>
@@ -263,7 +318,10 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
             <select
               className="h-11 w-full rounded-xl border border-[var(--ss-neutral-200)] bg-white px-3 text-sm"
               value={activeArea.id}
-              onChange={(event) => setAreaId(event.target.value)}
+              onChange={(event) => {
+                setAreaId(event.target.value);
+                resetDirectCompletion();
+              }}
             >
               {subject.areas.map((areaOption) => (
                 <option key={areaOption.id} value={areaOption.id}>
@@ -369,7 +427,7 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
         ) : null}
 
         <label className="mt-4 block text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          AI-underlag (för Skrivstationens &quot;Eget dokument&quot;)
+          AI-underlag (för direkt planeringsförslag eller Skrivstationens &quot;Eget dokument&quot;)
         </label>
         <textarea
           readOnly
@@ -384,11 +442,23 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
         ) : null}
 
         {directCompletion ? (
-          <textarea
-            readOnly
-            value={directCompletion}
-            className="mt-2 min-h-40 w-full rounded-2xl border border-[var(--ss-neutral-200)] bg-white px-3 py-2 text-xs leading-6"
-          />
+          <div className="mt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-[var(--ss-neutral-900)]">Planeringsförslag</p>
+                <p className="text-xs leading-6 text-muted-foreground">
+                  AI-svaret renderas som ett planeringsutkast i stället för som rå text.
+                </p>
+              </div>
+              <Button type="button" variant="outline" onClick={handleCopyGeneratedPlan}>
+                Kopiera planeringsförslag
+              </Button>
+            </div>
+
+            <div className="mt-3">
+              <DocumentRenderer content={directCompletion} templateType="custom" />
+            </div>
+          </div>
         ) : null}
       </section>
     </main>
