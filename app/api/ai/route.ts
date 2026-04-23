@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { CLAUDE_PRIMARY_MODEL, TEMPLATE_TYPES } from "@/lib/ai/provider";
 import { getSystemPrompt } from "@/lib/ai/prompts";
@@ -9,6 +9,12 @@ import {
   detectPotentialSensitiveContent,
   formatPotentialSensitiveContentMessage,
 } from "@/lib/gdpr/server-guard";
+import {
+  createRouteContext,
+  jsonWithContext,
+  logRouteError,
+  withRequestContext,
+} from "@/lib/server/request-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { parseUserSettings } from "@/lib/validations/user-settings";
@@ -27,6 +33,7 @@ const RequestSchema = z.object({
   }),
 });
 
+type RouteContext = ReturnType<typeof createRouteContext>;
 type AdminClient = ReturnType<typeof createAdminClient>;
 type GenerationAttemptResult =
   Database["public"]["Functions"]["begin_generation_attempt"]["Returns"][number];
@@ -40,24 +47,27 @@ type ProfileSnapshot = Pick<
   | "user_settings"
 >;
 
-function buildAttemptFailureResponse(reason: string): Response {
+function buildAttemptFailureResponse(context: RouteContext, reason: string): Response {
   switch (reason) {
     case "profile_not_found":
-      return NextResponse.json({ error: "Profil hittades inte" }, { status: 404 });
+      return jsonWithContext({ error: "Profil hittades inte" }, { status: 404 }, context);
     case "quota_exceeded":
-      return NextResponse.json(
+      return jsonWithContext(
         { error: "Månadens gratisgräns nådd", code: "QUOTA_EXCEEDED" },
         { status: 403 },
+        context,
       );
     case "rate_limited":
-      return NextResponse.json(
+      return jsonWithContext(
         { error: "För många förfrågningar. Vänta en stund och försök igen." },
         { status: 429 },
+        context,
       );
     default:
-      return NextResponse.json(
+      return jsonWithContext(
         { error: "Kunde inte starta genereringen just nu." },
         { status: 500 },
+        context,
       );
   }
 }
@@ -101,6 +111,7 @@ function hasWindowExpired(windowStart: string, windowSeconds: number): boolean {
 async function beginGenerationAttemptFallback(
   adminSupabase: AdminClient,
   userId: string,
+  context: RouteContext,
 ): Promise<GenerationAttemptResult | null> {
   const { data: profile, error: profileError } = await adminSupabase
     .from("profiles")
@@ -111,7 +122,7 @@ async function beginGenerationAttemptFallback(
     .maybeSingle();
 
   if (profileError) {
-    console.error("[AI Route] Fallback profile lookup failed:", profileError.message);
+    logRouteError(context, "Fallback profile lookup failed.", profileError);
     return null;
   }
 
@@ -137,7 +148,7 @@ async function beginGenerationAttemptFallback(
       .eq("id", userId);
 
     if (resetError) {
-      console.error("[AI Route] Fallback rate-limit reset failed:", resetError.message);
+      logRouteError(context, "Fallback rate-limit reset failed.", resetError);
       return null;
     }
   }
@@ -156,7 +167,7 @@ async function beginGenerationAttemptFallback(
     .eq("id", userId);
 
   if (countError) {
-    console.error("[AI Route] Fallback rate-limit increment failed:", countError.message);
+    logRouteError(context, "Fallback rate-limit increment failed.", countError);
     return null;
   }
 
@@ -176,7 +187,7 @@ async function beginGenerationAttemptFallback(
       .eq("id", userId);
 
     if (transformError) {
-      console.error("[AI Route] Fallback transform reservation failed:", transformError.message);
+      logRouteError(context, "Fallback transform reservation failed.", transformError);
       return null;
     }
 
@@ -198,6 +209,7 @@ async function beginGenerationAttemptFallback(
 async function beginGenerationAttempt(
   adminSupabase: AdminClient,
   userId: string,
+  context: RouteContext,
 ): Promise<GenerationAttemptResult | null> {
   const { data, error } = await adminSupabase
     .rpc("begin_generation_attempt", {
@@ -213,17 +225,18 @@ async function beginGenerationAttempt(
   }
 
   if (error) {
-    console.error("[AI Route] begin_generation_attempt RPC failed, using fallback:", error.message);
+    logRouteError(context, "begin_generation_attempt RPC failed, using fallback.", error);
   } else {
-    console.error("[AI Route] begin_generation_attempt RPC returned no data, using fallback.");
+    logRouteError(context, "begin_generation_attempt RPC returned no data, using fallback.");
   }
 
-  return beginGenerationAttemptFallback(adminSupabase, userId);
+  return beginGenerationAttemptFallback(adminSupabase, userId, context);
 }
 
 async function releaseGenerationAttempt(
   adminSupabase: AdminClient,
   userId: string,
+  context: RouteContext,
 ): Promise<void> {
   const { error } = await adminSupabase.rpc("release_generation_attempt", {
     p_user_id: userId,
@@ -233,7 +246,7 @@ async function releaseGenerationAttempt(
     return;
   }
 
-  console.error("[AI Route] release_generation_attempt RPC failed, using fallback:", error.message);
+  logRouteError(context, "release_generation_attempt RPC failed, using fallback.", error);
 
   const { data: profile, error: profileError } = await adminSupabase
     .from("profiles")
@@ -243,7 +256,7 @@ async function releaseGenerationAttempt(
 
   if (profileError || !profile) {
     if (profileError) {
-      console.error("[AI Route] Fallback release lookup failed:", profileError.message);
+      logRouteError(context, "Fallback release lookup failed.", profileError);
     }
     return;
   }
@@ -256,18 +269,23 @@ async function releaseGenerationAttempt(
     .eq("id", userId);
 
   if (updateError) {
-    console.error("[AI Route] Fallback release update failed:", updateError.message);
+    logRouteError(context, "Fallback release update failed.", updateError);
   }
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
+  const context = createRouteContext(req, "ai");
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Du behöver logga in för att fortsätta." }, { status: 401 });
+    return jsonWithContext(
+      { error: "Du behöver logga in för att fortsätta." },
+      { status: 401 },
+      context,
+    );
   }
 
   let body: unknown;
@@ -275,19 +293,20 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Ogiltig förfrågan" }, { status: 400 });
+    return jsonWithContext({ error: "Ogiltig förfrågan" }, { status: 400 }, context);
   }
 
   const parsed = RequestSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Ogiltig förfrågan" }, { status: 400 });
+    return jsonWithContext({ error: "Ogiltig förfrågan" }, { status: 400 }, context);
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json(
+    return jsonWithContext(
       { error: "AI-tjänsten är inte konfigurerad." },
       { status: 500 },
+      context,
     );
   }
 
@@ -297,9 +316,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   const potentialSensitiveContent = detectPotentialSensitiveContent(effectiveScrubbedInput);
 
   if (potentialSensitiveContent.length > 0) {
-    return NextResponse.json(
+    return jsonWithContext(
       { error: formatPotentialSensitiveContentMessage(potentialSensitiveContent) },
       { status: 400 },
+      context,
     );
   }
 
@@ -308,24 +328,26 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     adminSupabase = createAdminClient();
   } catch (error) {
-    console.error("[AI Route] Failed to create Supabase admin client:", error);
-    return NextResponse.json(
+    logRouteError(context, "Failed to create Supabase admin client.", error);
+    return jsonWithContext(
       { error: "Genereringstjänsten saknar serverkonfiguration för Supabase." },
       { status: 500 },
+      context,
     );
   }
 
-  const generationAttempt = await beginGenerationAttempt(adminSupabase, user.id);
+  const generationAttempt = await beginGenerationAttempt(adminSupabase, user.id, context);
 
   if (!generationAttempt) {
-    return NextResponse.json(
+    return jsonWithContext(
       { error: "Kunde inte starta genereringen just nu." },
       { status: 500 },
+      context,
     );
   }
 
   if (!generationAttempt.allowed) {
-    return buildAttemptFailureResponse(generationAttempt.reason);
+    return buildAttemptFailureResponse(context, generationAttempt.reason);
   }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -361,11 +383,10 @@ export async function POST(req: NextRequest): Promise<Response> {
         }
       } catch (error) {
         if (reservedTransform) {
-          await releaseGenerationAttempt(adminSupabase, user.id);
+          await releaseGenerationAttempt(adminSupabase, user.id, context);
         }
 
-        const message = error instanceof Error ? error.message : "Okänt fel vid generering";
-        console.error("[AI Route] Generation failed:", message);
+        logRouteError(context, "Generation failed.", error);
         controller.error(error);
         return;
       }
@@ -380,18 +401,21 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
 
       if (usageError) {
-        console.error("[AI Route] Failed to record usage event:", usageError.message);
+        logRouteError(context, "Failed to record usage event.", usageError);
       }
 
       controller.close();
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-    },
-  });
+  return withRequestContext(
+    new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    }),
+    context,
+  );
 }

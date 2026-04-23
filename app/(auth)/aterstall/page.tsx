@@ -10,6 +10,10 @@ import {
   sanitizeNextPath,
   type AuthSearchParams,
 } from "@/lib/auth/redirects";
+import {
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REQUIREMENTS_TEXT,
+} from "@/lib/auth/password-policy";
 import { createClient } from "@/lib/supabase/server";
 
 interface Props {
@@ -67,6 +71,7 @@ export default async function AterstallPage({ searchParams }: Props): Promise<JS
               name="password"
               type="password"
               autoComplete="new-password"
+              minLength={PASSWORD_MIN_LENGTH}
               required
               className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
             />
@@ -84,10 +89,15 @@ export default async function AterstallPage({ searchParams }: Props): Promise<JS
               name="confirmPassword"
               type="password"
               autoComplete="new-password"
+              minLength={PASSWORD_MIN_LENGTH}
               required
               className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
             />
           </div>
+
+          <p className="text-xs leading-6 text-muted-foreground">
+            {PASSWORD_REQUIREMENTS_TEXT}
+          </p>
 
           <AuthSubmitButton
             type="submit"

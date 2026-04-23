@@ -1,4 +1,4 @@
-import { TEMPLATE_TYPES, type TemplateType } from "@/lib/ai/provider";
+import { type TemplateType } from "@/lib/ai/provider";
 
 interface TemplateDetails {
   label: string;
@@ -73,17 +73,37 @@ Välj Veckobrev och klicka "Generera" för att få en färdig text till vårdnad
       "Flexibelt läge för sammanfattningar, planeringar och andra skolrelaterade dokumentutkast när de fasta mallarna inte räcker.",
     emptyStateHint:
       "Här visas ett bearbetat utkast som du kan kopiera vidare till ditt eget arbetsflöde.",
-    placeholder: `Exempeltext: "Jag behöver en vikarieanteckning för klass 5A i morgon. Matematik först (bråk s. 34–35), sedan läsning i par. Två elever behöver extra tydliga startinstruktioner och korta avstämningar efter 10 minuter."
+    placeholder: `Exempeltext: "Jag behöver en vikarieanteckning för klass 5A i morgon. Matematik först (bråk s. 34-35), sedan läsning i par. Två elever behöver extra tydliga startinstruktioner och korta avstämningar efter 10 minuter."
 
 Välj Eget dokument och klicka "Generera" för att få ett sakligt och användbart utkast.`,
   },
+  lektionsplanering: {
+    label: "Lektionsplanering",
+    pickerLabel: "Lektionsplanering",
+    eyebrow: "Planeringsläge",
+    summary: "Strukturerat nästa steg för undervisningen med mål, lektionsgång och uppföljning.",
+    cardDescription:
+      "Planeringsförslag som bygger på täckning, luckor och läraranteckningar i planeringsmodulen.",
+    emptyStateHint:
+      "Här visas ett planeringsutkast med tydlig översikt, lektionsgång, anpassningar och uppföljning.",
+    placeholder:
+      "Den här mallen används i planeringsmodulen för att omvandla checklista och läraranteckningar till ett nästa undervisningssteg.",
+  },
 };
 
-export const TEMPLATE_OPTIONS = TEMPLATE_TYPES.map((value) => ({
+const DRAFTING_PICKER_TEMPLATE_TYPES = [
+  "incidentrapport",
+  "larlogg",
+  "unikum",
+  "veckobrev",
+  "custom",
+] as const satisfies TemplateType[];
+
+export const TEMPLATE_OPTIONS = DRAFTING_PICKER_TEMPLATE_TYPES.map((value) => ({
   value,
   label: TEMPLATE_DETAILS[value].pickerLabel,
 }));
 
 export function isTemplateType(value: string): value is TemplateType {
-  return (TEMPLATE_TYPES as readonly string[]).includes(value);
+  return value in TEMPLATE_DETAILS;
 }

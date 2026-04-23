@@ -5,6 +5,11 @@ const mockCustomerRetrieve = vi.fn();
 const mockFrom = vi.fn();
 const mockUpdateEq = vi.fn();
 
+let existingProfile: {
+  subscription_status: string | null;
+  subscription_end_date: string | null;
+} | null;
+
 vi.mock("@/lib/stripe/server", () => ({
   createStripeClient: () => ({
     webhooks: {
@@ -22,7 +27,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-function createProfilesTable(existingProfile: unknown) {
+function createProfilesTable() {
   return {
     select: vi.fn(() => ({
       eq: vi.fn().mockReturnValue({
@@ -43,6 +48,10 @@ describe("/api/webhooks/stripe", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    existingProfile = {
+      subscription_status: "free",
+      subscription_end_date: null,
+    };
 
     mockUpdateEq.mockResolvedValue({ error: null });
     mockCustomerRetrieve.mockResolvedValue({
@@ -53,10 +62,7 @@ describe("/api/webhooks/stripe", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "profiles") {
-        return createProfilesTable({
-          subscription_status: "pro",
-          subscription_end_date: "2026-06-01T00:00:00.000Z",
-        });
+        return createProfilesTable();
       }
 
       throw new Error(`Unexpected table: ${table}`);
@@ -77,12 +83,44 @@ describe("/api/webhooks/stripe", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
       error: "Ogiltig signatur.",
     });
   });
 
-  it("skips duplicate one-time checkout events that would extend an existing pass", async () => {
+  it("keeps recurring activation on checkout.session.completed", async () => {
+    mockConstructEvent.mockReturnValue({
+      type: "checkout.session.completed",
+      created: 1_745_193_600,
+      data: {
+        object: {
+          metadata: {
+            supabase_user_id: "user-123",
+            price_type: "monthly",
+          },
+        },
+      },
+    });
+
+    const { POST } = await import("@/app/api/webhooks/stripe/route");
+    const response = await POST(
+      new Request("http://localhost/api/webhooks/stripe", {
+        method: "POST",
+        body: "{}",
+        headers: {
+          "stripe-signature": "valid",
+        },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    await expect(response.json()).resolves.toEqual({ received: true });
+    expect(mockUpdateEq).toHaveBeenCalledWith("id", "user-123");
+  });
+
+  it("does not grant one-time access on checkout.session.completed", async () => {
     mockConstructEvent.mockReturnValue({
       type: "checkout.session.completed",
       created: 1_745_193_600,
@@ -108,6 +146,74 @@ describe("/api/webhooks/stripe", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    await expect(response.json()).resolves.toEqual({ received: true });
+    expect(mockUpdateEq).not.toHaveBeenCalled();
+  });
+
+  it("grants one-time access on payment_intent.succeeded", async () => {
+    mockConstructEvent.mockReturnValue({
+      type: "payment_intent.succeeded",
+      created: 1_745_193_600,
+      data: {
+        object: {
+          metadata: {
+            supabase_user_id: "user-123",
+            price_type: "onetime",
+          },
+        },
+      },
+    });
+
+    const { POST } = await import("@/app/api/webhooks/stripe/route");
+    const response = await POST(
+      new Request("http://localhost/api/webhooks/stripe", {
+        method: "POST",
+        body: "{}",
+        headers: {
+          "stripe-signature": "valid",
+        },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    await expect(response.json()).resolves.toEqual({ received: true });
+    expect(mockUpdateEq).toHaveBeenCalledWith("id", "user-123");
+  });
+
+  it("skips duplicate one-time fulfillment on payment_intent.succeeded", async () => {
+    existingProfile = {
+      subscription_status: "pro",
+      subscription_end_date: "2025-05-24T00:00:00.000Z",
+    };
+
+    mockConstructEvent.mockReturnValue({
+      type: "payment_intent.succeeded",
+      created: 1_745_193_600,
+      data: {
+        object: {
+          metadata: {
+            supabase_user_id: "user-123",
+            price_type: "onetime",
+          },
+        },
+      },
+    });
+
+    const { POST } = await import("@/app/api/webhooks/stripe/route");
+    const response = await POST(
+      new Request("http://localhost/api/webhooks/stripe", {
+        method: "POST",
+        body: "{}",
+        headers: {
+          "stripe-signature": "valid",
+        },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({ received: true });
     expect(mockUpdateEq).not.toHaveBeenCalled();
   });
@@ -136,6 +242,7 @@ describe("/api/webhooks/stripe", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({ received: true });
     expect(mockCustomerRetrieve).toHaveBeenCalledWith("cus_123");
     expect(mockUpdateEq).toHaveBeenCalledWith("id", "user-123");

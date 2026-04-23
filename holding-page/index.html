@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Skolskribenten | Under utveckling</title>
+    <meta
+      name="description"
+      content="Skolskribenten bygger ett lugnare sätt för svenska lärare att skriva pedagogisk dokumentation med GDPR i fokus. Sidan är tillfällig medan tjänsten färdigställs."
+    />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#1f4d6d" />
+    <meta property="og:title" content="Skolskribenten | Under utveckling" />
+    <meta
+      property="og:description"
+      content="Ett lugnare sätt för svenska lärare att skriva pedagogisk dokumentation. Lanseras stegvis."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --page: #f4efe7;
+        --paper: rgba(255, 255, 255, 0.82);
+        --paper-strong: #ffffff;
+        --ink: #112332;
+        --muted: #536472;
+        --line: rgba(17, 35, 50, 0.1);
+        --primary: #1f4d6d;
+        --primary-soft: rgba(31, 77, 109, 0.12);
+        --secondary: #d17b57;
+        --secondary-soft: rgba(209, 123, 87, 0.14);
+        --success: #2d7462;
+        --shadow: 0 28px 90px -38px rgba(17, 35, 50, 0.42);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Manrope", "Helvetica Neue", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(31, 77, 109, 0.17), transparent 34%),
+          radial-gradient(circle at right 20%, rgba(209, 123, 87, 0.16), transparent 28%),
+          linear-gradient(180deg, #f8f4ee 0%, var(--page) 100%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .shell::before,
+      .shell::after {
+        content: "";
+        position: fixed;
+        z-index: 0;
+        border-radius: 999px;
+        pointer-events: none;
+        filter: blur(30px);
+      }
+
+      .shell::before {
+        top: -4rem;
+        left: -6rem;
+        width: 18rem;
+        height: 18rem;
+        background: rgba(31, 77, 109, 0.14);
+      }
+
+      .shell::after {
+        right: -5rem;
+        bottom: 12rem;
+        width: 16rem;
+        height: 16rem;
+        background: rgba(209, 123, 87, 0.18);
+      }
+
+      .wrap {
+        position: relative;
+        z-index: 1;
+        width: min(1120px, calc(100% - 2rem));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.4rem 0 0.8rem;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+      }
+
+      .brand-mark {
+        width: 3rem;
+        height: 3rem;
+        display: grid;
+        place-items: center;
+        border-radius: 1rem;
+        background: linear-gradient(145deg, var(--primary), #34698f);
+        color: #fff;
+        font-weight: 700;
+        box-shadow: 0 20px 40px -24px rgba(31, 77, 109, 0.9);
+      }
+
+      .brand-copy {
+        display: grid;
+        gap: 0.15rem;
+      }
+
+      .brand-copy strong {
+        font-size: 0.85rem;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--primary);
+      }
+
+      .brand-copy span {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .toplink {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.8rem 1.05rem;
+        border-radius: 999px;
+        border: 1px solid rgba(17, 35, 50, 0.12);
+        background: rgba(255, 255, 255, 0.7);
+        text-decoration: none;
+        font-weight: 600;
+        transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+
+      .toplink:hover,
+      .toplink:focus-visible {
+        transform: translateY(-1px);
+        border-color: rgba(17, 35, 50, 0.24);
+        background: rgba(255, 255, 255, 0.95);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+        gap: 2rem;
+        align-items: stretch;
+        padding: 2rem 0 4rem;
+      }
+
+      .hero-main {
+        display: grid;
+        gap: 1.5rem;
+        align-content: center;
+      }
+
+      .eyebrow {
+        width: fit-content;
+        padding: 0.55rem 0.95rem;
+        border-radius: 999px;
+        background: var(--secondary-soft);
+        color: var(--ink);
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 12ch;
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(3rem, 7vw, 5.6rem);
+        line-height: 0.95;
+        letter-spacing: -0.04em;
+      }
+
+      .lead {
+        max-width: 42rem;
+        margin: 0;
+        font-size: 1.14rem;
+        line-height: 1.9;
+        color: var(--muted);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: 3.35rem;
+        padding: 0.95rem 1.35rem;
+        border-radius: 999px;
+        text-decoration: none;
+        font-weight: 700;
+        transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease,
+          border-color 180ms ease;
+      }
+
+      .button:hover,
+      .button:focus-visible {
+        transform: translateY(-1px);
+      }
+
+      .button-primary {
+        background: linear-gradient(135deg, var(--primary), #33698d);
+        color: #fff;
+        box-shadow: 0 22px 40px -26px rgba(31, 77, 109, 0.95);
+      }
+
+      .button-secondary {
+        border: 1px solid rgba(17, 35, 50, 0.12);
+        background: rgba(255, 255, 255, 0.75);
+        color: var(--ink);
+      }
+
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.85rem;
+      }
+
+      .fact {
+        padding: 1rem 1rem 1.05rem;
+        border: 1px solid var(--line);
+        border-radius: 1.35rem;
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(18px);
+      }
+
+      .fact strong {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.9rem;
+      }
+
+      .fact span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.93rem;
+        line-height: 1.65;
+      }
+
+      .panel {
+        position: relative;
+        overflow: hidden;
+        padding: 1.6rem;
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: 2rem;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.9)),
+          linear-gradient(140deg, rgba(31, 77, 109, 0.07), rgba(209, 123, 87, 0.05));
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(20px);
+      }
+
+      .panel::after {
+        content: "";
+        position: absolute;
+        inset: auto -4rem -4rem auto;
+        width: 11rem;
+        height: 11rem;
+        border-radius: 999px;
+        background: rgba(31, 77, 109, 0.08);
+      }
+
+      .panel-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.48rem 0.82rem;
+        border-radius: 999px;
+        background: rgba(45, 116, 98, 0.1);
+        color: var(--success);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .panel h2 {
+        margin: 1rem 0 0.5rem;
+        font-size: 1.8rem;
+        line-height: 1.15;
+      }
+
+      .panel p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.75;
+      }
+
+      .panel-list {
+        display: grid;
+        gap: 0.85rem;
+        margin: 1.25rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .panel-list li {
+        display: grid;
+        gap: 0.2rem;
+        padding: 1rem 1rem 1.05rem;
+        border-radius: 1.2rem;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(17, 35, 50, 0.08);
+      }
+
+      .panel-list strong {
+        font-size: 1rem;
+      }
+
+      .panel-list span {
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.6;
+      }
+
+      .details {
+        padding: 0 0 5rem;
+      }
+
+      .details-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+      }
+
+      .card {
+        padding: 1.5rem;
+        border-radius: 1.6rem;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 20px 50px -34px rgba(17, 35, 50, 0.25);
+      }
+
+      .card h3 {
+        margin: 0 0 0.75rem;
+        font-size: 1.2rem;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.75;
+      }
+
+      .footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.4rem 0 2.2rem;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .footer a {
+        font-weight: 700;
+        text-decoration: none;
+        color: var(--primary);
+      }
+
+      .skip-link {
+        position: absolute;
+        left: 1rem;
+        top: -3rem;
+        z-index: 10;
+        padding: 0.75rem 1rem;
+        border-radius: 0.85rem;
+        background: #fff;
+        color: var(--ink);
+        box-shadow: var(--shadow);
+      }
+
+      .skip-link:focus {
+        top: 1rem;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .details-grid {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          max-width: none;
+        }
+
+        .facts {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .wrap {
+          width: min(100% - 1.1rem, 1120px);
+        }
+
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .toplink,
+        .button {
+          width: 100%;
+        }
+
+        .hero {
+          padding-top: 1.1rem;
+          padding-bottom: 3rem;
+        }
+
+        .panel,
+        .card {
+          padding: 1.25rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <a class="skip-link" href="#main">Hoppa till innehållet</a>
+
+      <div class="wrap">
+        <header class="topbar">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">S</div>
+            <div class="brand-copy">
+              <strong>Skolskribenten</strong>
+              <span>Dokumentation för svenska lärare</span>
+            </div>
+          </div>
+
+          <a
+            class="toplink"
+            href="mailto:kontakt@skolskribenten.com?subject=Jag%20vill%20veta%20när%20Skolskribenten%20öppnar"
+          >
+            kontakt@skolskribenten.com
+          </a>
+        </header>
+
+        <main id="main">
+          <section class="hero" aria-labelledby="hero-title">
+            <div class="hero-main">
+              <div class="eyebrow">Under utveckling</div>
+              <h1 id="hero-title">Ett lugnare sätt att skriva skolans dokumentation.</h1>
+              <p class="lead">
+                Skolskribenten byggs för lärare som vill få ordning på incidentrapporter,
+                lärloggar och veckobrev utan att tappa tempo eller släppa taget om GDPR-tänket.
+                Den här sidan är tillfällig medan vi färdigställer tjänsten.
+              </p>
+
+              <div class="actions">
+                <a
+                  class="button button-primary"
+                  href="mailto:kontakt@skolskribenten.com?subject=Jag%20vill%20få%20besked%20när%20Skolskribenten%20öppnar"
+                >
+                  Få besked när vi öppnar
+                </a>
+                <a class="button button-secondary" href="#mer">
+                  Se vad vi bygger
+                </a>
+              </div>
+
+              <div class="facts" aria-label="Kort översikt">
+                <div class="fact">
+                  <strong>GDPR först</strong>
+                  <span>Fokus på att skydda elevuppgifter innan text skickas vidare.</span>
+                </div>
+                <div class="fact">
+                  <strong>För svenska lärare</strong>
+                  <span>Språk, arbetsflöde och dokumenttyper utgår från skolvardagen här.</span>
+                </div>
+                <div class="fact">
+                  <strong>Lanseras stegvis</strong>
+                  <span>Vi prioriterar tydlighet, trygghet och riktiga lärarflöden före fart.</span>
+                </div>
+              </div>
+            </div>
+
+            <aside class="panel" aria-labelledby="panel-title">
+              <div class="panel-badge">Lanseringsläge</div>
+              <h2 id="panel-title">Vi bygger färdigt det som måste kännas tryggt från dag ett.</h2>
+              <p>
+                Just nu förbereder vi den publika versionen av Skolskribenten. Vill du bli en av
+                de första som får besked när sidan öppnar, skriv till oss direkt.
+              </p>
+
+              <ul class="panel-list">
+                <li>
+                  <strong>Pedagogisk dokumentation utan startsträcka</strong>
+                  <span>Från råa anteckningar till tydligare utkast för skolans vardag.</span>
+                </li>
+                <li>
+                  <strong>Byggt med integritet som produktkrav</strong>
+                  <span>Skydd av personuppgifter är inte en eftertanke utan en del av flödet.</span>
+                </li>
+                <li>
+                  <strong>Direktkontakt under byggtiden</strong>
+                  <span>Maila till kontakt@skolskribenten.com om du vill följa arbetet eller testa tidigt.</span>
+                </li>
+              </ul>
+            </aside>
+          </section>
+
+          <section class="details" id="mer" aria-labelledby="details-title">
+            <div class="details-grid">
+              <article class="card">
+                <h3 id="details-title">Vad som kommer</h3>
+                <p>
+                  Skolskribenten utvecklas för att hjälpa lärare skriva snabbare med tydlig struktur
+                  för till exempel incidentrapporter, lärloggar och återkommande skolkommunikation.
+                </p>
+              </article>
+
+              <article class="card">
+                <h3>Varför sidan ser enkel ut just nu</h3>
+                <p>
+                  Vi använder den här tillfälliga sidan medan vi låser den tekniska grunden,
+                  kvalitetssäkrar betalningsflöden och slutför den sista produktionen inför öppning.
+                </p>
+              </article>
+
+              <article class="card">
+                <h3>Hur du når oss under tiden</h3>
+                <p>
+                  Vill du fråga om status, tidig tillgång eller bara säga hej? Skriv till
+                  <a href="mailto:kontakt@skolskribenten.com"> kontakt@skolskribenten.com</a>.
+                </p>
+              </article>
+            </div>
+          </section>
+        </main>
+
+        <footer class="footer">
+          <span>Skolskribenten bygger ett lugnare verktyg för skolans dokumentation.</span>
+          <a href="mailto:kontakt@skolskribenten.com">kontakt@skolskribenten.com</a>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

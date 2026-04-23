@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeSupportEmail } from "@/lib/support/abuse-protection";
 
 function trimString(value: unknown): unknown {
   return typeof value === "string" ? value.trim() : value;
@@ -20,7 +21,11 @@ export const SUPPORT_TOPICS = [
 export const SupportRequestSchema = z.object({
   email: z.preprocess(
     trimString,
-    z.string().email("Ange en giltig e-postadress.").max(120, "E-postadressen är för lång."),
+    z
+      .string()
+      .email("Ange en giltig e-postadress.")
+      .max(120, "E-postadressen är för lång.")
+      .transform(normalizeSupportEmail),
   ),
   message: z.preprocess(
     trimString,

@@ -4,6 +4,7 @@ export const TEMPLATE_TYPES = [
   "unikum",
   "veckobrev",
   "custom",
+  "lektionsplanering",
 ] as const;
 
 export const SCHOOL_LEVELS = ["F-3", "4-6", "7-9"] as const;

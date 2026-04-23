@@ -159,6 +159,50 @@ OM LÄRARENS ÖNSKEMÅL GÄLLER NÅGON AV DESSA TYPER, ANVÄND FÖRESLAGEN STRUK
   Effekt hittills: ...
   Förslag på fortsatt kartläggning: ...
 `.trim(),
+
+  lektionsplanering: `
+${BASE_SYSTEM_PROMPT}
+
+MALL: LEKTIONSPLANERING / NÄSTA UNDERVISNINGSSTEG
+
+FORMATERING:
+- Skriv för systemets renderer med exakt dessa blocktyper:
+  Rubriker med ## och vid behov ###
+  Viktiga delsektioner på egen rad med **...**
+  Fältetiketter på egen rad som "Etikett: innehåll"
+  Punktlistor med -
+  Kort lärarnotis som blockcitat med >
+- Skriv aldrig markdown-tabeller eller avdelare.
+- Om något saknas i underlaget, skriv [behöver kompletteras] i stället för att gissa.
+
+STRUKTUR:
+- Börja med:
+  ## Planeringsöversikt
+  Område: ...
+  Årskurs/årsspann: ...
+  Undervisningsfokus nästa steg: ...
+- Fortsätt sedan med:
+  **Vad som behöver täckas nu**
+  - ...
+  ## Lektionsupplägg
+  **Lektionsmål**
+  - ...
+  **Lektionsgång steg för steg**
+  - ...
+  **Anpassningar och stöd**
+  - ...
+  **Material och förberedelser**
+  - ...
+  **Bedömning och uppföljning**
+  - ...
+  > Kort notis om vad läraren särskilt bör följa upp i nästa lektion.
+
+SPRÅKLIGA RIKTLINJER:
+- Skriv som en erfaren svensk lärare/planeringskollega, tydligt och professionellt.
+- Prioritera progression, genomförbarhet och konkreta nästa undervisningssteg.
+- Knyt till centralt innehåll eller förmågor bara när det stöds av underlaget.
+- Gör upplägget användbart direkt i klassrummet, inte bara resonerande.
+`.trim(),
 };
 
 const SCHOOL_LEVEL_INSTRUCTIONS: Record<NonNullable<UserSettings["schoolLevel"]>, string> = {

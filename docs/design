@@ -5,16 +5,16 @@
 
 ## CURRENT IMPLEMENTATION STATUS
 
-This document is still the architectural source of truth, but it no longer maps 1:1 to the live repo in every detail. Use it together with `docs/roadmap`:
+This file is historical build-spec material from the earlier MVP buildout. It is still useful for background and product intent, but it is no longer the current operational source of truth.
 
-- Built now:
-  auth flow, protected dashboard, drafting station, settings, legal pages, Supabase schema, Claude integration, polished output rendering, local draft autosave, contact/about/FAQ pages, and the under-construction `lektionsplanering` route.
-- Newly added after the original spec:
-  explicit `Unikum` template option, template-specific example text, and local browser draft persistence.
-- Still planned or actively evolving:
-  Stripe end-to-end hardening, further UI polish from teacher testing, handwritten note import, and later roadmap items listed in `docs/roadmap`.
+Use the repo like this:
 
-When the design doc and the live app differ, prefer the live code for current behavior and `docs/roadmap` for upcoming work.
+- Use `docs/audit.md` for the current production-readiness status, open risks, and phased next steps.
+- Use the live code for current routes, API behavior, and data contracts.
+- Use `docs/roadmap` for forward-looking ideas that are not yet committed to implementation.
+- Treat the remaining sections below as archived build guidance unless they are confirmed by the current code.
+
+When this file and the live app differ, prefer `docs/audit.md` and the codebase.
 
 ---
 

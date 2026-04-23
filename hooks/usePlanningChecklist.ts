@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getPlanningStorageKey,
   parseStoredChecklist,
@@ -14,31 +14,62 @@ import {
   type ChecklistStatus,
 } from "@/lib/planning/gap-analysis";
 import {
+  createPlanningSyncQueueItem,
   enqueuePlanningSyncItem,
   getPlanningSyncQueueKey,
+  markPlanningSyncItemConflict,
+  markPlanningSyncItemFailed,
+  markPlanningSyncItemPending,
   parsePlanningSyncQueue,
+  removePlanningSyncItem,
   serializePlanningSyncQueue,
+  upsertPlanningSyncItem,
+  type PlanningSyncConflictState,
+  type PlanningSyncQueueItem,
 } from "@/lib/planning/sync-queue";
 
 type CloudStatus = "idle" | "syncing" | "synced" | "error" | "conflict";
 
-type ConflictState = {
-  localState: {
-    progressMap: ChecklistProgressMap;
-    teacherNotes: string;
-    updatedAt: string;
-  };
+type PlanningSyncResponsePayload = {
+  code?: string;
+  error?: string;
   mergedState?: {
     progressMap: ChecklistProgressMap;
     teacherNotes: string;
     updatedAt: string;
   };
-  serverState: {
+  state?: {
     progressMap: ChecklistProgressMap;
     teacherNotes: string;
     updatedAt: string;
   };
 };
+
+function isCurrentScope(
+  target: { areaId: string; subjectId: string },
+  current: { areaId: string; subjectId: string },
+): boolean {
+  return target.areaId === current.areaId && target.subjectId === current.subjectId;
+}
+
+function buildConflictState(
+  localState: {
+    progressMap: ChecklistProgressMap;
+    teacherNotes: string;
+    updatedAt: string;
+  },
+  payload: PlanningSyncResponsePayload,
+): PlanningSyncConflictState | null {
+  if (!payload.state) {
+    return null;
+  }
+
+  return {
+    localState,
+    mergedState: payload.mergedState,
+    serverState: payload.state,
+  };
+}
 
 export function usePlanningChecklist(params: {
   area: PlanningArea;
@@ -54,15 +85,17 @@ export function usePlanningChecklist(params: {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncLog, setSyncLog] = useState<string[]>([]);
   const [hasHydratedLocal, setHasHydratedLocal] = useState(false);
-  const [cloudRetryToken, setCloudRetryToken] = useState(0);
   const [queuedSyncCount, setQueuedSyncCount] = useState(0);
-  const [queuedItems, setQueuedItems] = useState<Array<{ areaId: string; enqueuedAt: string; subjectId: string }>>(
-    [],
-  );
-  const [pendingConflict, setPendingConflict] = useState<ConflictState | null>(null);
+  const [queuedItems, setQueuedItems] = useState<PlanningSyncQueueItem[]>([]);
+  const [pendingConflict, setPendingConflict] = useState<PlanningSyncConflictState | null>(null);
+  const isFlushingQueueRef = useRef(false);
 
   const storageKey = getPlanningStorageKey(userId, subjectId, area.id);
   const syncQueueKey = getPlanningSyncQueueKey(userId);
+  const currentScope = { areaId: area.id, subjectId };
+  const currentQueuedConflict = queuedItems.find(
+    (item) => isCurrentScope(item, currentScope) && item.status === "conflict" && item.conflictState,
+  );
 
   const appendSyncLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString("sv-SE", {
@@ -70,8 +103,15 @@ export function usePlanningChecklist(params: {
       minute: "2-digit",
       second: "2-digit",
     });
-    setSyncLog((current) => [`${timestamp} - ${message}`, ...current].slice(0, 5));
+    setSyncLog((current) => [`${timestamp} - ${message}`, ...current].slice(0, 6));
   };
+
+  const getConflictStrategyLabel = (strategy: "server" | "merged" | "local") =>
+    strategy === "server"
+      ? "molnets version"
+      : strategy === "merged"
+        ? "kombinerat förslag"
+        : "din senaste version";
 
   const refreshQueueState = () => {
     if (typeof window === "undefined") {
@@ -80,13 +120,71 @@ export function usePlanningChecklist(params: {
 
     const queue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
     setQueuedSyncCount(queue.length);
-    setQueuedItems(
-      queue.map((item) => ({
-        areaId: item.areaId,
-        enqueuedAt: item.enqueuedAt,
-        subjectId: item.subjectId,
-      })),
+    setQueuedItems(queue);
+  };
+
+  const persistQueueState = (queue: PlanningSyncQueueItem[]) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(syncQueueKey, serializePlanningSyncQueue(queue));
+    setQueuedSyncCount(queue.length);
+    setQueuedItems(queue);
+  };
+
+  const writeStoredChecklistState = (
+    target: { areaId: string; subjectId: string },
+    state: {
+      progressMap: ChecklistProgressMap;
+      teacherNotes: string;
+      updatedAt: string;
+    },
+  ) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      getPlanningStorageKey(userId, target.subjectId as PlanningSubjectId, target.areaId),
+      serializeChecklistState(state),
     );
+  };
+
+  const applyStateToActiveArea = (target: { areaId: string; subjectId: string }, state: PlanningSyncQueueItem | {
+    progressMap: ChecklistProgressMap;
+    teacherNotes: string;
+    updatedAt: string;
+  }) => {
+    if (!isCurrentScope(target, currentScope)) {
+      return;
+    }
+
+    setProgressMap({ ...getDefaultStatusMap(area), ...state.progressMap });
+    setTeacherNotes(state.teacherNotes);
+    setUpdatedAt(state.updatedAt);
+  };
+
+  const hydrateChecklistFromStorage = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const stored = parseStoredChecklist(window.localStorage.getItem(storageKey));
+    const defaults = getDefaultStatusMap(area);
+
+    if (!stored) {
+      setProgressMap(defaults);
+      setTeacherNotes("");
+      setUpdatedAt("");
+      setHasHydratedLocal(true);
+      return;
+    }
+
+    setProgressMap({ ...defaults, ...stored.progressMap });
+    setTeacherNotes(stored.teacherNotes);
+    setUpdatedAt(stored.updatedAt);
+    setHasHydratedLocal(true);
   };
 
   const enqueueSyncPayload = (payload: {
@@ -101,17 +199,160 @@ export function usePlanningChecklist(params: {
     }
 
     const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
-    const nextQueue = enqueuePlanningSyncItem(currentQueue, {
-      ...payload,
-      enqueuedAt: new Date().toISOString(),
-    });
+    const nextQueue = enqueuePlanningSyncItem(
+      currentQueue,
+      createPlanningSyncQueueItem({
+        ...payload,
+        enqueuedAt: new Date().toISOString(),
+      }),
+    );
 
-    window.localStorage.setItem(syncQueueKey, serializePlanningSyncQueue(nextQueue));
-    refreshQueueState();
+    persistQueueState(nextQueue);
   };
 
-  const flushCloudQueue = async () => {
-    if (!cloudSyncEnabled || typeof window === "undefined") {
+  const postPlanningChecklistState = async (payload: {
+    areaId: string;
+    progressMap: ChecklistProgressMap;
+    subjectId: string;
+    teacherNotes: string;
+    updatedAt: string;
+  }) => {
+    const response = await fetch("/api/planning/checklist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    let responsePayload: PlanningSyncResponsePayload = {};
+
+    try {
+      responsePayload = (await response.json()) as PlanningSyncResponsePayload;
+    } catch {
+      responsePayload = {};
+    }
+
+    return { response, responsePayload };
+  };
+
+  const resolveConflictForScope = (
+    target: { areaId: string; subjectId: string },
+    strategy: "server" | "merged" | "local",
+    conflictState: PlanningSyncConflictState,
+  ) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
+    const existingQueueItem =
+      currentQueue.find((item) => isCurrentScope(item, target)) ??
+      createPlanningSyncQueueItem({
+        areaId: target.areaId,
+        enqueuedAt: new Date().toISOString(),
+        progressMap: conflictState.localState.progressMap,
+        subjectId: target.subjectId,
+        teacherNotes: conflictState.localState.teacherNotes,
+        updatedAt: conflictState.localState.updatedAt,
+      });
+
+    const baseState =
+      strategy === "server"
+        ? conflictState.serverState
+        : strategy === "merged" && conflictState.mergedState
+          ? conflictState.mergedState
+          : conflictState.localState;
+
+    if (strategy === "server") {
+      const nextQueue = removePlanningSyncItem(currentQueue, target);
+      writeStoredChecklistState(target, baseState);
+      persistQueueState(nextQueue);
+      applyStateToActiveArea(target, baseState);
+      if (isCurrentScope(target, currentScope)) {
+        setPendingConflict(null);
+        setCloudStatus("synced");
+        setLastSyncedAt(baseState.updatedAt);
+      }
+      appendSyncLog(
+        `Konflikt löst: ${getConflictStrategyLabel(strategy)} valdes för ${target.subjectId}/${target.areaId}.`,
+      );
+      return;
+    }
+
+    const nextUpdatedAt = new Date().toISOString();
+    const nextState = {
+      progressMap: baseState.progressMap,
+      teacherNotes: baseState.teacherNotes,
+      updatedAt: nextUpdatedAt,
+    };
+    const pendingItem = markPlanningSyncItemPending(existingQueueItem, {
+      enqueuedAt: nextUpdatedAt,
+      progressMap: nextState.progressMap,
+      teacherNotes: nextState.teacherNotes,
+      updatedAt: nextState.updatedAt,
+    });
+    const nextQueue = upsertPlanningSyncItem(currentQueue, pendingItem);
+
+    writeStoredChecklistState(target, nextState);
+    persistQueueState(nextQueue);
+    applyStateToActiveArea(target, nextState);
+    if (isCurrentScope(target, currentScope)) {
+      setPendingConflict(null);
+      setCloudStatus("idle");
+    }
+
+    appendSyncLog(
+      `Konflikt löst: ${getConflictStrategyLabel(strategy)} valdes för ${target.subjectId}/${target.areaId}.`,
+    );
+
+    if (!isCurrentScope(target, currentScope)) {
+      void flushCloudQueue();
+    }
+  };
+
+  const discardQueuedItem = (target: { areaId: string; subjectId: string }) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
+    const nextQueue = removePlanningSyncItem(currentQueue, target);
+
+    persistQueueState(nextQueue);
+
+    if (isCurrentScope(target, currentScope)) {
+      setPendingConflict(null);
+      setCloudStatus("idle");
+    }
+
+    appendSyncLog(`Köad planering togs bort för ${target.subjectId}/${target.areaId}.`);
+  };
+
+  const retryQueuedItem = (target: { areaId: string; subjectId: string }) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
+    const existingItem = currentQueue.find((item) => isCurrentScope(item, target));
+
+    if (!existingItem || existingItem.status === "conflict") {
+      return;
+    }
+
+    const nextQueue = upsertPlanningSyncItem(
+      currentQueue,
+      markPlanningSyncItemPending(existingItem, {
+        enqueuedAt: new Date().toISOString(),
+      }),
+    );
+
+    persistQueueState(nextQueue);
+    appendSyncLog(`Ny synkförsök köad för ${target.subjectId}/${target.areaId}.`);
+    void flushCloudQueue();
+  };
+
+  async function flushCloudQueue() {
+    if (!cloudSyncEnabled || typeof window === "undefined" || isFlushingQueueRef.current) {
       return;
     }
 
@@ -120,48 +361,136 @@ export function usePlanningChecklist(params: {
       return;
     }
 
-    const remaining = [...queue];
+    isFlushingQueueRef.current = true;
 
-    while (remaining.length > 0) {
-      const item = remaining[0]!;
+    let nextQueue = [...queue];
+    let hadConflict = false;
+    let hadFailure = false;
+    let newConflictDetected = false;
+    let processedAny = false;
 
-      try {
-        const response = await fetch("/api/planning/checklist", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+    if (!currentQueuedConflict) {
+      setCloudStatus("syncing");
+    }
+
+    try {
+      for (const item of queue) {
+        if (item.status === "conflict") {
+          hadConflict = true;
+          continue;
+        }
+
+        processedAny = true;
+        const attemptedAt = new Date().toISOString();
+
+        try {
+          const { response, responsePayload } = await postPlanningChecklistState({
             areaId: item.areaId,
             progressMap: item.progressMap,
             subjectId: item.subjectId,
             teacherNotes: item.teacherNotes,
             updatedAt: item.updatedAt,
-          }),
-        });
+          });
 
-        if (response.status === 409) {
-          appendSyncLog("Konflikt i synkkö - väntar på manuell lösning.");
+          if (response.status === 409) {
+            const conflictState = buildConflictState(
+              {
+                progressMap: item.progressMap,
+                teacherNotes: item.teacherNotes,
+                updatedAt: item.updatedAt,
+              },
+              responsePayload,
+            );
+
+            if (!conflictState) {
+              nextQueue = upsertPlanningSyncItem(
+                nextQueue,
+                markPlanningSyncItemFailed(item, {
+                  attemptedAt,
+                  errorMessage: responsePayload.error ?? "Konflikt upptäcktes men kunde inte tolkas.",
+                }),
+              );
+              hadFailure = true;
+              continue;
+            }
+
+            nextQueue = upsertPlanningSyncItem(
+              nextQueue,
+              markPlanningSyncItemConflict(item, {
+                attemptedAt,
+                conflictState,
+                errorMessage: responsePayload.error,
+              }),
+            );
+            hadConflict = true;
+            newConflictDetected = true;
+
+            if (isCurrentScope(item, currentScope)) {
+              setPendingConflict(conflictState);
+              setCloudStatus("conflict");
+            }
+
+            appendSyncLog(
+              `Synken behöver ditt val för ${item.subjectId}/${item.areaId} innan den kan fortsätta.`,
+            );
+            continue;
+          }
+
+          if (!response.ok) {
+            nextQueue = upsertPlanningSyncItem(
+              nextQueue,
+              markPlanningSyncItemFailed(item, {
+                attemptedAt,
+                errorMessage: responsePayload.error ?? "Cloudsync sparning misslyckades.",
+              }),
+            );
+            hadFailure = true;
+            appendSyncLog(`Synkfel för ${item.subjectId}/${item.areaId}.`);
+
+            if (response.status === 401 || response.status === 403) {
+              setCloudStatus("error");
+              break;
+            }
+
+            continue;
+          }
+
+          nextQueue = removePlanningSyncItem(nextQueue, item);
+
+          if (isCurrentScope(item, currentScope)) {
+            setLastSyncedAt(attemptedAt);
+            if (!currentQueuedConflict) {
+              setCloudStatus("synced");
+            }
+          }
+        } catch {
+          nextQueue = upsertPlanningSyncItem(
+            nextQueue,
+            markPlanningSyncItemFailed(item, {
+              attemptedAt,
+              errorMessage: "Nätverksfel vid replay av cloudsync.",
+            }),
+          );
+          hadFailure = true;
+          setCloudStatus("error");
+          appendSyncLog(`Nätverksfel i synkkön för ${item.subjectId}/${item.areaId}.`);
           break;
         }
-
-        if (!response.ok) {
-          break;
-        }
-
-        remaining.shift();
-      } catch {
-        break;
       }
-    }
+    } finally {
+      persistQueueState(nextQueue);
 
-    window.localStorage.setItem(syncQueueKey, serializePlanningSyncQueue(remaining));
-    refreshQueueState();
+      if (processedAny && nextQueue.length === 0 && !hadConflict && !hadFailure) {
+        appendSyncLog("Synkkö tömd.");
+      } else if (newConflictDetected) {
+        appendSyncLog("Minst en köad planering behöver ditt val innan synken kan fortsätta.");
+      } else if (hadFailure) {
+        appendSyncLog("Synkkö delvis kvar efter flush.");
+      }
 
-    if (remaining.length === 0) {
-      appendSyncLog("Synkkö tömd.");
-    } else {
-      appendSyncLog("Synkkö delvis kvar efter flush.");
+      isFlushingQueueRef.current = false;
     }
-  };
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -205,14 +534,26 @@ export function usePlanningChecklist(params: {
   }, [syncQueueKey]);
 
   useEffect(() => {
-    if (!cloudSyncEnabled || !hasHydratedLocal) {
+    const nextConflict = currentQueuedConflict?.conflictState ?? null;
+    setPendingConflict(nextConflict);
+
+    if (nextConflict) {
+      setCloudStatus("conflict");
+      return;
+    }
+
+    setCloudStatus((current) => (current === "conflict" ? "idle" : current));
+  }, [currentQueuedConflict]);
+
+  useEffect(() => {
+    if (!cloudSyncEnabled || !hasHydratedLocal || typeof window === "undefined") {
       return;
     }
 
     let active = true;
 
     const loadCloudState = async () => {
-      setCloudStatus("syncing");
+      setCloudStatus((current) => (current === "conflict" ? current : "syncing"));
 
       try {
         const response = await fetch(
@@ -221,7 +562,7 @@ export function usePlanningChecklist(params: {
         );
 
         if (!response.ok) {
-          setCloudStatus("error");
+          setCloudStatus((current) => (current === "conflict" ? current : "error"));
           return;
         }
 
@@ -233,10 +574,24 @@ export function usePlanningChecklist(params: {
           } | null;
         };
 
-        if (!active || !payload.state) {
-          setCloudStatus("synced");
+        if (!active) {
+          return;
+        }
+
+        const queuedVersionForCurrent = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey)).find(
+          (item) => isCurrentScope(item, currentScope),
+        );
+
+        if (!payload.state) {
+          setCloudStatus((current) => (current === "conflict" ? current : "synced"));
           setLastSyncedAt(new Date().toISOString());
           appendSyncLog("Cloudsync hämtning klar.");
+          return;
+        }
+
+        if (queuedVersionForCurrent) {
+          setCloudStatus(queuedVersionForCurrent.status === "conflict" ? "conflict" : "synced");
+          appendSyncLog("Cloudsync hämtning klar. Lokal köad version behölls.");
           return;
         }
 
@@ -249,12 +604,12 @@ export function usePlanningChecklist(params: {
           setUpdatedAt(payload.state.updatedAt);
         }
 
-        setCloudStatus("synced");
+        setCloudStatus((current) => (current === "conflict" ? current : "synced"));
         setLastSyncedAt(new Date().toISOString());
         appendSyncLog("Cloudsync hämtning klar.");
       } catch {
         if (active) {
-          setCloudStatus("error");
+          setCloudStatus((current) => (current === "conflict" ? current : "error"));
           appendSyncLog("Cloudsync hämtning misslyckades.");
         }
       }
@@ -265,7 +620,7 @@ export function usePlanningChecklist(params: {
     return () => {
       active = false;
     };
-  }, [area, cloudSyncEnabled, hasHydratedLocal, subjectId, updatedAt]);
+  }, [area, cloudSyncEnabled, hasHydratedLocal, subjectId, syncQueueKey, updatedAt]);
 
   useEffect(() => {
     if (!cloudSyncEnabled || !hasHydratedLocal || typeof window === "undefined") {
@@ -282,10 +637,10 @@ export function usePlanningChecklist(params: {
     return () => {
       window.removeEventListener("online", handleOnline);
     };
-  }, [cloudSyncEnabled, hasHydratedLocal]);
+  }, [cloudSyncEnabled, hasHydratedLocal, syncQueueKey]);
 
   useEffect(() => {
-    if (!cloudSyncEnabled || !hasHydratedLocal) {
+    if (!cloudSyncEnabled || !hasHydratedLocal || currentQueuedConflict) {
       return;
     }
 
@@ -294,46 +649,64 @@ export function usePlanningChecklist(params: {
       setCloudStatus("syncing");
 
       try {
-        const response = await fetch("/api/planning/checklist", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            areaId: area.id,
-            progressMap,
-            subjectId,
-            teacherNotes,
-            updatedAt: nextUpdatedAt,
-          }),
+        const { response, responsePayload } = await postPlanningChecklistState({
+          areaId: area.id,
+          progressMap,
+          subjectId,
+          teacherNotes,
+          updatedAt: nextUpdatedAt,
         });
 
         if (response.status === 409) {
-          const payload = (await response.json()) as {
-            state?: {
-              progressMap: ChecklistProgressMap;
-              teacherNotes: string;
-              updatedAt: string;
-            };
-            mergedState?: {
-              progressMap: ChecklistProgressMap;
-              teacherNotes: string;
-              updatedAt: string;
-            };
-          };
+          const conflictState = buildConflictState(
+            {
+              progressMap: { ...progressMap },
+              teacherNotes,
+              updatedAt: nextUpdatedAt,
+            },
+            responsePayload,
+          );
 
-          if (payload.state) {
-            setPendingConflict({
-              localState: {
-                progressMap: { ...progressMap },
-                teacherNotes,
-                updatedAt: nextUpdatedAt,
-              },
-              mergedState: payload.mergedState,
-              serverState: payload.state,
+          if (conflictState) {
+            setPendingConflict(conflictState);
+            enqueueSyncPayload({
+              areaId: area.id,
+              progressMap: conflictState.localState.progressMap,
+              subjectId,
+              teacherNotes: conflictState.localState.teacherNotes,
+              updatedAt: conflictState.localState.updatedAt,
             });
+
+            if (typeof window !== "undefined") {
+              const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
+              const queuedItem =
+                currentQueue.find((item) => isCurrentScope(item, currentScope)) ??
+                createPlanningSyncQueueItem({
+                  areaId: area.id,
+                  enqueuedAt: nextUpdatedAt,
+                  progressMap: conflictState.localState.progressMap,
+                  subjectId,
+                  teacherNotes: conflictState.localState.teacherNotes,
+                  updatedAt: conflictState.localState.updatedAt,
+                });
+
+              const nextQueue = upsertPlanningSyncItem(
+                currentQueue,
+                markPlanningSyncItemConflict(queuedItem, {
+                  attemptedAt: nextUpdatedAt,
+                  conflictState,
+                  errorMessage: responsePayload.error,
+                }),
+              );
+
+              persistQueueState(nextQueue);
+            }
           }
 
           setCloudStatus("conflict");
-          appendSyncLog("Konflikt upptäckt. Väntar på val i konfliktöversikten.");
+          appendSyncLog(
+            "Det finns både en sparad molnversion och en ny version på den här enheten. Välj vilken som ska gälla.",
+          );
           return;
         }
 
@@ -351,6 +724,15 @@ export function usePlanningChecklist(params: {
           return;
         }
 
+        if (typeof window !== "undefined") {
+          const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
+          const nextQueue = removePlanningSyncItem(currentQueue, currentScope);
+          if (nextQueue.length !== currentQueue.length) {
+            persistQueueState(nextQueue);
+          }
+        }
+
+        setPendingConflict(null);
         setUpdatedAt(nextUpdatedAt);
         setCloudStatus("synced");
         setLastSyncedAt(nextUpdatedAt);
@@ -372,7 +754,7 @@ export function usePlanningChecklist(params: {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [area, cloudRetryToken, cloudSyncEnabled, hasHydratedLocal, progressMap, subjectId, teacherNotes]);
+  }, [area, cloudSyncEnabled, currentQueuedConflict, hasHydratedLocal, progressMap, subjectId, teacherNotes]);
 
   const gapAnalysis = useMemo(() => analyzeChecklistGap(area, progressMap), [area, progressMap]);
 
@@ -394,7 +776,6 @@ export function usePlanningChecklist(params: {
   };
 
   const retryCloudSync = () => {
-    setCloudRetryToken((current) => current + 1);
     appendSyncLog("Manuell sync-retry startad.");
     void flushCloudQueue();
   };
@@ -404,27 +785,27 @@ export function usePlanningChecklist(params: {
       return;
     }
 
-    const target =
-      strategy === "server"
-        ? pendingConflict.serverState
-        : strategy === "merged" && pendingConflict.mergedState
-          ? pendingConflict.mergedState
-          : pendingConflict.localState;
+    resolveConflictForScope(currentScope, strategy, pendingConflict);
+  };
 
-    setProgressMap({
-      ...getDefaultStatusMap(area),
-      ...target.progressMap,
-    });
-    setTeacherNotes(target.teacherNotes);
-    setUpdatedAt(strategy === "local" ? new Date().toISOString() : target.updatedAt);
-    setPendingConflict(null);
-    setCloudStatus("idle");
-    setCloudRetryToken((current) => current + 1);
-    appendSyncLog(`Konflikt löst via strategi: ${strategy}.`);
+  const resolveQueuedConflict = (
+    target: { areaId: string; subjectId: string },
+    strategy: "server" | "merged" | "local",
+  ) => {
+    const queueItem = queuedItems.find(
+      (item) => isCurrentScope(item, target) && item.status === "conflict" && item.conflictState,
+    );
+
+    if (!queueItem?.conflictState) {
+      return;
+    }
+
+    resolveConflictForScope(target, strategy, queueItem.conflictState);
   };
 
   return {
     cloudStatus,
+    discardQueuedItem,
     flushCloudQueue,
     gapAnalysis,
     lastSyncedAt,
@@ -432,9 +813,12 @@ export function usePlanningChecklist(params: {
     progressMap,
     queuedItems,
     queuedSyncCount,
+    reloadChecklistFromStorage: hydrateChecklistFromStorage,
     resetChecklist,
     resolveConflict,
+    resolveQueuedConflict,
     retryCloudSync,
+    retryQueuedItem,
     setItemStatus,
     setTeacherNotes: updateTeacherNotes,
     syncLog,

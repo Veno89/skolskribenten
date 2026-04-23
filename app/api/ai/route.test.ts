@@ -129,6 +129,7 @@ describe("/api/ai", () => {
     );
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
       error: "Du behöver logga in för att fortsätta.",
     });
@@ -153,6 +154,7 @@ describe("/api/ai", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
       error: "Känsligt innehåll upptäcktes.",
     });
@@ -194,6 +196,7 @@ describe("/api/ai", () => {
     );
 
     expect(response.status).toBe(403);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
       error: "Månadens gratisgräns nådd",
       code: "QUOTA_EXCEEDED",
@@ -206,7 +209,7 @@ describe("/api/ai", () => {
       new Request("http://localhost/api/ai", {
         method: "POST",
         body: JSON.stringify({
-          templateType: "larlogg",
+          templateType: "lektionsplanering",
           scrubbedInput: "Det här är ett tillräckligt långt och redan scrubbat underlag.",
           scrubberStats: {
             namesReplaced: 1,
@@ -217,8 +220,15 @@ describe("/api/ai", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.text()).resolves.toBe("Första delen. Andra delen.");
     expect(mockAnthropicStream).toHaveBeenCalledTimes(1);
     expect(mockUsageInsert).toHaveBeenCalledTimes(1);
+    expect(mockUsageInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template_type: "lektionsplanering",
+        user_id: "user-123",
+      }),
+    );
   });
 });

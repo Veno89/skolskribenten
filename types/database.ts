@@ -160,7 +160,13 @@ export interface Database {
           pii_tokens_removed: number;
           scrubber_ran: boolean;
           server_pii_check_passed: boolean;
-          template_type: "incidentrapport" | "larlogg" | "unikum" | "veckobrev" | "custom";
+          template_type:
+            | "incidentrapport"
+            | "larlogg"
+            | "unikum"
+            | "veckobrev"
+            | "custom"
+            | "lektionsplanering";
           user_id: string;
         };
         Insert: {
@@ -170,7 +176,13 @@ export interface Database {
           pii_tokens_removed?: number;
           scrubber_ran?: boolean;
           server_pii_check_passed?: boolean;
-          template_type: "incidentrapport" | "larlogg" | "unikum" | "veckobrev" | "custom";
+          template_type:
+            | "incidentrapport"
+            | "larlogg"
+            | "unikum"
+            | "veckobrev"
+            | "custom"
+            | "lektionsplanering";
           user_id: string;
         };
         Update: {
@@ -180,7 +192,13 @@ export interface Database {
           pii_tokens_removed?: number;
           scrubber_ran?: boolean;
           server_pii_check_passed?: boolean;
-          template_type?: "incidentrapport" | "larlogg" | "unikum" | "veckobrev" | "custom";
+          template_type?:
+            | "incidentrapport"
+            | "larlogg"
+            | "unikum"
+            | "veckobrev"
+            | "custom"
+            | "lektionsplanering";
           user_id?: string;
         };
         Relationships: [

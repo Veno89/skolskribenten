@@ -32,6 +32,7 @@ function createProfileSelectChain(profile: unknown) {
     eq: vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: profile,
+        error: null,
       }),
     }),
   };
@@ -62,9 +63,10 @@ describe("/api/stripe/portal", () => {
     });
 
     const { POST } = await import("@/app/api/stripe/portal/route");
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/stripe/portal", { method: "POST" }) as never);
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
       error: "Du behöver logga in för att fortsätta.",
     });
@@ -87,9 +89,10 @@ describe("/api/stripe/portal", () => {
     });
 
     const { POST } = await import("@/app/api/stripe/portal/route");
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/stripe/portal", { method: "POST" }) as never);
 
     expect(response.status).toBe(400);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
       error: "Det finns inget månadsabonnemang att hantera just nu.",
     });
@@ -112,9 +115,10 @@ describe("/api/stripe/portal", () => {
     });
 
     const { POST } = await import("@/app/api/stripe/portal/route");
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/stripe/portal", { method: "POST" }) as never);
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
       url: "https://stripe.test/portal",
     });
@@ -122,5 +126,36 @@ describe("/api/stripe/portal", () => {
       customer: "cus_123",
       return_url: "http://localhost:3000/konto",
     });
+  });
+
+  it("returns a friendly error when portal creation fails", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        return {
+          select: vi.fn(() =>
+            createProfileSelectChain({
+              stripe_customer_id: "cus_123",
+              subscription_status: "pro",
+              subscription_end_date: null,
+            })),
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    });
+    mockPortalSessionCreate.mockRejectedValueOnce(new Error("Stripe unavailable"));
+
+    const { POST } = await import("@/app/api/stripe/portal/route");
+    const response = await POST(new Request("http://localhost/api/stripe/portal", { method: "POST" }) as never);
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    await expect(response.json()).resolves.toEqual({
+      error: "Kunde inte öppna kundportalen just nu. Försök igen om en stund.",
+    });
+
+    consoleErrorSpy.mockRestore();
   });
 });

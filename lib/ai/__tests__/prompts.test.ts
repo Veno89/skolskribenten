@@ -23,12 +23,21 @@ describe("getSystemPrompt", () => {
     expect(prompt).toContain("varmare och mer stödjande språk");
   });
 
-  it("includes the new Unikum-specific structure", () => {
+  it("includes the Unikum-specific structure", () => {
     const prompt = getSystemPrompt("unikum");
 
     expect(prompt).toContain("MALL: UNIKUM-DOKUMENTATION");
     expect(prompt).toContain("Sammanhang:");
     expect(prompt).toContain("Koppling till lärande/mål:");
+  });
+
+  it("includes the dedicated lesson-planning structure", () => {
+    const prompt = getSystemPrompt("lektionsplanering");
+
+    expect(prompt).toContain("MALL: LEKTIONSPLANERING / NÄSTA UNDERVISNINGSSTEG");
+    expect(prompt).toContain("## Planeringsöversikt");
+    expect(prompt).toContain("**Lektionsgång steg för steg**");
+    expect(prompt).toContain("> Kort notis om vad läraren särskilt bör följa upp i nästa lektion.");
   });
 
   it("leaves the prompt untouched when no settings are saved", () => {

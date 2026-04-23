@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { SupportRequestSchema } from "@/lib/support/schema";
 
 describe("SupportRequestSchema", () => {
-  it("accepts a valid support request and trims values", () => {
+  it("accepts a valid support request, trims values, and normalizes email", () => {
     const parsed = SupportRequestSchema.parse({
-      email: "  larare@skola.se ",
+      email: "  Larare@Skola.se ",
       message: "  Jag får ett fel när jag försöker generera ett dokument.  ",
       name: "  Anna Andersson ",
       role: "  Klasslärare åk 5 ",

@@ -11,6 +11,10 @@ import {
   sanitizeNextPath,
   type AuthSearchParams,
 } from "@/lib/auth/redirects";
+import {
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REQUIREMENTS_TEXT,
+} from "@/lib/auth/password-policy";
 import { createClient } from "@/lib/supabase/server";
 
 interface Props {
@@ -104,6 +108,7 @@ export default async function RegistreraPage({ searchParams }: Props): Promise<J
               name="password"
               type="password"
               autoComplete="new-password"
+              minLength={PASSWORD_MIN_LENGTH}
               required
               className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
             />
@@ -121,11 +126,16 @@ export default async function RegistreraPage({ searchParams }: Props): Promise<J
               name="confirmPassword"
               type="password"
               autoComplete="new-password"
+              minLength={PASSWORD_MIN_LENGTH}
               required
               className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
             />
           </div>
         </div>
+
+        <p className="text-xs leading-6 text-muted-foreground">
+          {PASSWORD_REQUIREMENTS_TEXT}
+        </p>
 
         <p className="text-xs leading-6 text-muted-foreground">
           Efter registrering skickar vi en bekräftelselänk till din e-postadress.

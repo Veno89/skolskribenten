@@ -1,21 +1,63 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import {
+  createRouteContext,
+  jsonWithContext,
+  logRouteError,
+  logRouteInfo,
+} from "@/lib/server/request-context";
+import {
+  getSupportRateLimitWindowStart,
+  hasExceededSupportRateLimit,
+  isDuplicateSupportRequest,
+  isSupportHoneypotTriggered,
+} from "@/lib/support/abuse-protection";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { SupportRequestSchema } from "@/lib/support/schema";
 
+const SUCCESS_MESSAGE = "Tack. Ditt meddelande är mottaget och ligger nu i vår supportinkorg.";
+const RATE_LIMIT_MESSAGE =
+  "Du har skickat flera meddelanden på kort tid. Vänta gärna en stund innan du försöker igen.";
+
+function buildSuccessResponse(context: ReturnType<typeof createRouteContext>): Response {
+  return jsonWithContext(
+    { ok: true, message: SUCCESS_MESSAGE },
+    { status: 200 },
+    context,
+  );
+}
+
+function getHoneypotValue(body: unknown): unknown {
+  if (!body || typeof body !== "object") {
+    return undefined;
+  }
+
+  return (body as Record<string, unknown>).website;
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
+  const context = createRouteContext(req, "support");
   let body: unknown;
 
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Ogiltig förfrågan." }, { status: 400 });
+    return jsonWithContext({ error: "Ogiltig förfrågan." }, { status: 400 }, context);
+  }
+
+  if (isSupportHoneypotTriggered(getHoneypotValue(body))) {
+    logRouteInfo(context, "Suppressed honeypot support submission.");
+    return buildSuccessResponse(context);
   }
 
   const parsed = SupportRequestSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Ogiltig förfrågan." }, { status: 400 });
+    return jsonWithContext(
+      { error: parsed.error.issues[0]?.message ?? "Ogiltig förfrågan." },
+      { status: 400 },
+      context,
+    );
   }
 
   let userId: string | null = null;
@@ -32,6 +74,31 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   try {
     const adminSupabase = createAdminClient();
+    const { data: recentRequests, error: recentRequestsError } = await adminSupabase
+      .from("support_requests")
+      .select("message, created_at")
+      .eq("email", parsed.data.email)
+      .gte("created_at", getSupportRateLimitWindowStart());
+
+    if (recentRequestsError) {
+      logRouteError(context, "Failed to read recent support requests.", recentRequestsError);
+    } else if (recentRequests) {
+      if (isDuplicateSupportRequest(recentRequests, parsed.data.message)) {
+        logRouteInfo(context, "Suppressed duplicate support submission.", {
+          email: parsed.data.email,
+        });
+        return buildSuccessResponse(context);
+      }
+
+      if (hasExceededSupportRateLimit(recentRequests)) {
+        logRouteInfo(context, "Support rate limit reached.", {
+          email: parsed.data.email,
+          recentRequestCount: recentRequests.length,
+        });
+        return jsonWithContext({ error: RATE_LIMIT_MESSAGE }, { status: 429 }, context);
+      }
+    }
+
     const { error } = await adminSupabase.from("support_requests").insert({
       email: parsed.data.email,
       message: parsed.data.message,
@@ -42,22 +109,21 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
 
     if (error) {
-      console.error("[Support Route] Failed to store support request:", error.message);
-      return NextResponse.json(
+      logRouteError(context, "Failed to store support request.", error);
+      return jsonWithContext(
         { error: "Vi kunde inte ta emot meddelandet just nu. Försök igen om en stund." },
         { status: 500 },
+        context,
       );
     }
   } catch (error) {
-    console.error("[Support Route] Failed to create support request:", error);
-    return NextResponse.json(
+    logRouteError(context, "Failed to create support request.", error);
+    return jsonWithContext(
       { error: "Vi kunde inte ta emot meddelandet just nu. Försök igen om en stund." },
       { status: 500 },
+      context,
     );
   }
 
-  return NextResponse.json(
-    { ok: true, message: "Tack. Ditt meddelande är mottaget och ligger nu i vår supportinkorg." },
-    { status: 200 },
-  );
+  return buildSuccessResponse(context);
 }

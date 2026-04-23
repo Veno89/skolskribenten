@@ -19,6 +19,7 @@ export function ContactForm(): JSX.Element {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
   const [message, setMessage] = useState("");
+  const [website, setWebsite] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionState, setSubmissionState] = useState<SubmissionState>({ status: "idle" });
 
@@ -28,6 +29,7 @@ export function ContactForm(): JSX.Element {
     setEmail("");
     setRole("");
     setMessage("");
+    setWebsite("");
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -47,6 +49,7 @@ export function ContactForm(): JSX.Element {
           name,
           role,
           topic,
+          website,
         }),
       });
 
@@ -77,6 +80,18 @@ export function ContactForm(): JSX.Element {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      <div aria-hidden="true" className="sr-only">
+        <label htmlFor="contact-website">Lämna det här fältet tomt</label>
+        <Input
+          id="contact-website"
+          name="website"
+          value={website}
+          onChange={(event) => setWebsite(event.target.value)}
+          autoComplete="off"
+          tabIndex={-1}
+        />
+      </div>
+
       <div className="grid gap-5 md:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="contact-name" className="text-sm font-medium text-[var(--ss-neutral-900)]">

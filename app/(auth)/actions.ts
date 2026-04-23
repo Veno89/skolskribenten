@@ -8,15 +8,15 @@ import {
   DEFAULT_POST_AUTH_REDIRECT,
   sanitizeNextPath,
 } from "@/lib/auth/redirects";
+import {
+  PASSWORD_REQUIREMENTS_MESSAGE,
+  PasswordSchema,
+} from "@/lib/auth/password-policy";
 import { getAppUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { getFirstIssue } from "@/lib/validations/helpers";
 
 const EmailSchema = z.string().trim().email("Ange en giltig e-postadress.");
-const PasswordSchema = z
-  .string()
-  .min(8, "Lösenordet måste vara minst 8 tecken.")
-  .max(72, "Lösenordet är för långt.");
 
 const SignInSchema = z.object({
   email: EmailSchema,
@@ -79,7 +79,7 @@ function toFriendlyAuthError(message: string): string {
   }
 
   if (normalized.includes("password")) {
-    return "Lösenordet uppfyller inte kraven än.";
+    return PASSWORD_REQUIREMENTS_MESSAGE;
   }
 
   if (normalized.includes("rate limit")) {
