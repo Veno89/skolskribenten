@@ -11,6 +11,39 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      app_admins: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "app_admins_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "app_admins_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           api_call_count: number;
@@ -391,32 +424,53 @@ export interface Database {
       };
       support_requests: {
         Row: {
+          assigned_to: string | null;
           created_at: string;
+          deleted_at: string | null;
           email: string;
+          handled_at: string | null;
           id: string;
+          last_status_at: string;
           message: string;
           name: string;
+          redacted_at: string | null;
+          request_id: string | null;
           role: string | null;
+          status: "new" | "triaged" | "in_progress" | "resolved" | "spam" | "redacted" | "deleted";
           topic: string;
           user_id: string | null;
         };
         Insert: {
+          assigned_to?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
           email: string;
+          handled_at?: string | null;
           id?: string;
+          last_status_at?: string;
           message: string;
           name: string;
+          redacted_at?: string | null;
+          request_id?: string | null;
           role?: string | null;
+          status?: "new" | "triaged" | "in_progress" | "resolved" | "spam" | "redacted" | "deleted";
           topic: string;
           user_id?: string | null;
         };
         Update: {
+          assigned_to?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
           email?: string;
+          handled_at?: string | null;
           id?: string;
+          last_status_at?: string;
           message?: string;
           name?: string;
+          redacted_at?: string | null;
+          request_id?: string | null;
           role?: string | null;
+          status?: "new" | "triaged" | "in_progress" | "resolved" | "spam" | "redacted" | "deleted";
           topic?: string;
           user_id?: string | null;
         };

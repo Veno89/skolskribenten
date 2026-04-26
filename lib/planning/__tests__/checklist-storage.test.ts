@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_PLANNING_EXPORT_ENTRIES,
+  MAX_PLANNING_IMPORT_BYTES,
+  MAX_PLANNING_TEACHER_NOTES_LENGTH,
   applyPlanningImportPayload,
   buildPlanningExportPayload,
   getPlanningStorageKey,
@@ -96,5 +99,47 @@ describe("planning checklist storage", () => {
     const imported = applyPlanningImportPayload(storage, "user-1", parsed!);
     expect(imported).toBe(1);
     expect(parseStoredChecklist(storage.getItem(userKey))?.teacherNotes).toBe("U1");
+  });
+
+  it("rejects oversized planning imports", () => {
+    const oversized = "x".repeat(MAX_PLANNING_IMPORT_BYTES + 1);
+
+    expect(parsePlanningExportPayload(oversized)).toBeNull();
+  });
+
+  it("rejects imports with too many entries and truncates long notes", () => {
+    const tooManyEntries = {
+      version: 1,
+      exportedAt: "2026-04-20T00:00:00.000Z",
+      entries: Array.from({ length: MAX_PLANNING_EXPORT_ENTRIES + 1 }, (_, index) => ({
+        key: `skolskribenten:planning:user-1:historia:${index}`,
+        state: {
+          progressMap: {},
+          teacherNotes: "note",
+          updatedAt: "2026-04-20T00:00:00.000Z",
+        },
+      })),
+    };
+
+    expect(parsePlanningExportPayload(JSON.stringify(tooManyEntries))).toBeNull();
+
+    const parsed = parsePlanningExportPayload(
+      JSON.stringify({
+        version: 1,
+        exportedAt: "2026-04-20T00:00:00.000Z",
+        entries: [
+          {
+            key: "skolskribenten:planning:user-1:historia:test",
+            state: {
+              progressMap: {},
+              teacherNotes: "x".repeat(MAX_PLANNING_TEACHER_NOTES_LENGTH + 20),
+              updatedAt: "2026-04-20T00:00:00.000Z",
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(parsed?.entries[0]?.state.teacherNotes).toHaveLength(MAX_PLANNING_TEACHER_NOTES_LENGTH);
   });
 });

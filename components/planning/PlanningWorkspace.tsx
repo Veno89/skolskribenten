@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useCompletion } from "@/hooks/useCompletion";
 import { usePlanningChecklist } from "@/hooks/usePlanningChecklist";
 import {
+  MAX_PLANNING_IMPORT_BYTES,
   applyPlanningImportPayload,
   buildPlanningExportPayload,
   parsePlanningExportPayload,
@@ -211,6 +212,14 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
     event.currentTarget.value = "";
 
     if (!file) {
+      return;
+    }
+
+    if (file.size > MAX_PLANNING_IMPORT_BYTES) {
+      setImportMessage({
+        message: "Filen är för stor. Exportera om från Skolskribenten och försök igen.",
+        tone: "error",
+      });
       return;
     }
 
@@ -563,6 +572,10 @@ export function PlanningWorkspace({ cloudSyncEnabled, userId }: Props): JSX.Elem
             </span>
           </label>
         </div>
+        <p className="mt-3 max-w-3xl text-xs leading-6 text-muted-foreground">
+          Exporterade planeringsfiler kan innehålla egna planeringsanteckningar. Spara dem inte på
+          delade enheter och importera bara filer som kommer från ditt eget Skolskribenten-konto.
+        </p>
         {copyMessage ? <InlineMessage message={copyMessage.message} tone={copyMessage.tone} /> : null}
         {importMessage ? <InlineMessage message={importMessage.message} tone={importMessage.tone} /> : null}
 

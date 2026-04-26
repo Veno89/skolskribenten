@@ -5,10 +5,10 @@ export interface PlanningOnboardingState {
   dismissedAt: string | null;
 }
 
-const STORAGE_PREFIX = "skolskribenten:planning-onboarding:";
+export const PLANNING_ONBOARDING_STORAGE_PREFIX = "skolskribenten:planning-onboarding:";
 
 export function getPlanningOnboardingKey(userId: string): string {
-  return `${STORAGE_PREFIX}${userId}`;
+  return `${PLANNING_ONBOARDING_STORAGE_PREFIX}${userId}`;
 }
 
 export function getDefaultPlanningOnboardingState(): PlanningOnboardingState {

@@ -6,6 +6,7 @@ Current repo status:
 - advanced MVP / controlled-pilot stage
 - the current production-readiness roadmap lives in `docs/audit.md`
 - `docs/roadmap` is the short current roadmap
+- `docs/support-operations.md` is the support triage and privacy runbook
 - `docs/design` is now only a historical archive pointer, not implementation truth
 
 ## Core Promise
@@ -90,6 +91,7 @@ Protected dashboard routes:
 - `/lektionsplanering`
 - `/installningar`
 - `/konto`
+- `/admin/support` for server-gated support admins
 
 Main API routes:
 - `/api/ai`
@@ -162,13 +164,14 @@ pnpm billing:reconcile:repair
 Supabase migrations live in `supabase/migrations/`.
 
 The current local migration set runs through:
-- `014_authoritative_entitlement_hardening.sql`
+- `016_support_admin_operations.sql`
 
 The live app expects at least:
 - `profiles`
 - `usage_events`
 - `planning_checklists`
 - `support_requests`
+- `app_admins`
 - RLS policies
 - the generation-attempt quota functions
 - the monthly reset / entitlement maintenance SQL jobs
@@ -183,6 +186,7 @@ Implemented now:
 - recurring and one-time billing flows
 - recurring billing portal access
 - server-side support intake
+- admin-gated support triage, redaction, and soft-deletion workflow
 - middleware security headers and route-level tests around the protected server surface
 
 Known deliberate limitations:

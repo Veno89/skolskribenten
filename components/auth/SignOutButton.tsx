@@ -3,7 +3,7 @@
 import { signOutAction } from "@/app/(auth)/actions";
 import { AuthSubmitButton } from "@/components/auth/AuthSubmitButton";
 import type { ButtonProps } from "@/components/ui/button";
-import { clearAllDraftStorage } from "@/lib/drafting/draft-storage";
+import { clearAllLocalAppStorage } from "@/lib/privacy/local-data";
 
 interface Props {
   className?: string;
@@ -26,8 +26,8 @@ export function SignOutButton({
     }
 
     try {
-      clearAllDraftStorage(window.localStorage);
-      clearAllDraftStorage(window.sessionStorage);
+      clearAllLocalAppStorage(window.localStorage);
+      clearAllLocalAppStorage(window.sessionStorage);
     } catch {
       // Ignore browsers where storage is unavailable.
     }

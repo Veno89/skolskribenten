@@ -11,6 +11,12 @@ import {
   isDuplicateSupportRequest,
   isSupportHoneypotTriggered,
 } from "@/lib/support/abuse-protection";
+import {
+  detectSupportSensitiveContent,
+  formatSupportSensitiveContentMessage,
+  hashSupportEmail,
+  summarizeSupportSensitiveContentTypes,
+} from "@/lib/support/server-privacy";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { SupportRequestSchema } from "@/lib/support/schema";
@@ -60,7 +66,22 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
+  const sensitiveContentFindings = detectSupportSensitiveContent(parsed.data.message);
+
+  if (sensitiveContentFindings.length > 0) {
+    logRouteInfo(context, "Rejected support submission with sensitive content.", {
+      sensitiveContentTypes: summarizeSupportSensitiveContentTypes(sensitiveContentFindings),
+    });
+
+    return jsonWithContext(
+      { error: formatSupportSensitiveContentMessage(sensitiveContentFindings) },
+      { status: 400 },
+      context,
+    );
+  }
+
   let userId: string | null = null;
+  const emailHash = hashSupportEmail(parsed.data.email);
 
   try {
     const supabase = createClient();
@@ -85,14 +106,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     } else if (recentRequests) {
       if (isDuplicateSupportRequest(recentRequests, parsed.data.message)) {
         logRouteInfo(context, "Suppressed duplicate support submission.", {
-          email: parsed.data.email,
+          emailHash,
         });
         return buildSuccessResponse(context);
       }
 
       if (hasExceededSupportRateLimit(recentRequests)) {
         logRouteInfo(context, "Support rate limit reached.", {
-          email: parsed.data.email,
+          emailHash,
           recentRequestCount: recentRequests.length,
         });
         return jsonWithContext({ error: RATE_LIMIT_MESSAGE }, { status: 429 }, context);
@@ -103,7 +124,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       email: parsed.data.email,
       message: parsed.data.message,
       name: parsed.data.name,
+      request_id: context.requestId,
       role: parsed.data.role ?? null,
+      status: "new",
       topic: parsed.data.topic,
       user_id: userId,
     });

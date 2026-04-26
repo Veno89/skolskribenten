@@ -23,7 +23,10 @@ export interface PlanningExportPayload {
   entries: PlanningExportEntry[];
 }
 
-const PLANNING_STORAGE_PREFIX = "skolskribenten:planning:";
+export const PLANNING_STORAGE_PREFIX = "skolskribenten:planning:";
+export const MAX_PLANNING_IMPORT_BYTES = 512 * 1024;
+export const MAX_PLANNING_EXPORT_ENTRIES = 250;
+export const MAX_PLANNING_TEACHER_NOTES_LENGTH = 5000;
 
 export function getPlanningStorageKey(userId: string, subjectId: PlanningSubjectId, areaId: string): string {
   return `${PLANNING_STORAGE_PREFIX}${userId}:${subjectId}:${areaId}`;
@@ -42,7 +45,9 @@ export function parseStoredChecklist(value: string | null): StoredChecklistState
     }
 
     const teacherNotes =
-      typeof parsed.state.teacherNotes === "string" ? parsed.state.teacherNotes : "";
+      typeof parsed.state.teacherNotes === "string"
+        ? parsed.state.teacherNotes.slice(0, MAX_PLANNING_TEACHER_NOTES_LENGTH)
+        : "";
     const updatedAt = typeof parsed.state.updatedAt === "string" ? parsed.state.updatedAt : "";
     const progressMap =
       parsed.state.progressMap && typeof parsed.state.progressMap === "object"
@@ -87,6 +92,10 @@ export function buildPlanningExportPayload(storage: Storage, userId: string): Pl
     }
 
     entries.push({ key, state: parsed });
+
+    if (entries.length >= MAX_PLANNING_EXPORT_ENTRIES) {
+      break;
+    }
   }
 
   return {
@@ -97,10 +106,18 @@ export function buildPlanningExportPayload(storage: Storage, userId: string): Pl
 }
 
 export function parsePlanningExportPayload(rawValue: string): PlanningExportPayload | null {
+  if (rawValue.length > MAX_PLANNING_IMPORT_BYTES) {
+    return null;
+  }
+
   try {
     const parsed = JSON.parse(rawValue) as Partial<PlanningExportPayload>;
 
     if (parsed.version !== 1 || !Array.isArray(parsed.entries)) {
+      return null;
+    }
+
+    if (parsed.entries.length > MAX_PLANNING_EXPORT_ENTRIES) {
       return null;
     }
 
@@ -116,7 +133,9 @@ export function parsePlanningExportPayload(rawValue: string): PlanningExportPayl
               ? (entry.state.progressMap as ChecklistProgressMap)
               : {},
           teacherNotes:
-            entry.state && typeof entry.state.teacherNotes === "string" ? entry.state.teacherNotes : "",
+            entry.state && typeof entry.state.teacherNotes === "string"
+              ? entry.state.teacherNotes.slice(0, MAX_PLANNING_TEACHER_NOTES_LENGTH)
+              : "",
           updatedAt:
             entry.state && typeof entry.state.updatedAt === "string" ? entry.state.updatedAt : "",
         };

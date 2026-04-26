@@ -43,44 +43,55 @@ Scope reviewed:
 - Auth actions, password policy, settings/account profile update flow, protected route middleware, security headers, legal/FAQ/contact copy, README, roadmap, and historical design docs.
 - Non-billing tests for AI, GDPR, support, planning, auth policy, middleware, request context, and storage helpers.
 
+Phase A implementation update:
+- Support submissions now run a server-side sensitive-content check before storage, reject obvious names/personnummer/contact details, store request IDs and lifecycle status fields, and avoid raw email addresses in route-level duplicate/rate-limit logs.
+- `supabase/migrations/015_support_privacy_lifecycle.sql` adds support request status, owner, handled/redacted/deleted timestamps, request IDs, indexes, and a status timestamp trigger.
+- Sign-out and Settings now share a clear-all local data utility for drafts, planning checklist state, planning sync queues, and onboarding state.
+- Planning import/export now has file-size, entry-count, and teacher-note length guardrails plus an explicit warning that exports can contain planning notes.
+
+Phase B implementation update:
+- `supabase/migrations/016_support_admin_operations.sql` adds a server-side `app_admins` allowlist for privileged support operations.
+- `/admin/support` now provides an admin-gated support queue with open/status filters, assignment, status updates, redaction, and soft deletion.
+- Support destructive actions require explicit confirmation and replace stored message/contact content with placeholders instead of spreading it into logs or external tools.
+- `docs/support-operations.md` now defines admin access, status meanings, triage, redaction, deletion, retention, and incident handling.
+
 ### Highest-Priority Findings
 #### 1. Support intake can become an accidental sensitive-content database
 Severity: High
 
 Why it matters:
-The product promise is strongest when teacher-written content stays out of durable storage. The support form is a necessary exception, but it is still not treated like a complete data lifecycle. A teacher can paste raw notes, pupil names, or incident details into `/kontakt`; the server stores the full message in `support_requests`, and only UI copy currently discourages that behavior.
+The product promise is strongest when teacher-written content stays out of durable storage. The support form is a necessary exception, and the server now rejects obvious sensitive content before storage. It still needs a complete operational lifecycle: triage UI, retention execution, deletion/redaction workflow, and incident runbook.
 
 Evidence:
-- `app/api/support/route.ts` stores `name`, `email`, `role`, `topic`, `message`, and optional `user_id` through the admin client.
-- `supabase/migrations/010_support_requests.sql` creates a durable `message` column with no status, retention, redaction, classification, or deletion fields.
-- `components/shared/ContactForm.tsx` and `app/kontakt/page.tsx` now include user-facing warnings not to paste pupil names or full raw documentation, but the server still accepts and stores any text that passes basic schema validation.
-- Duplicate/rate-limit logs include the submitted email address through `logRouteInfo`, while ops alerts sanitize that detail only when an error alert is queued.
+- `app/api/support/route.ts` stores `name`, `email`, `role`, `topic`, `message`, request ID, status, and optional `user_id` through the admin client after schema, honeypot, rate-limit, duplicate, and sensitive-content checks.
+- `supabase/migrations/015_support_privacy_lifecycle.sql` adds lifecycle fields and status timestamp handling, but no automated retention job or admin triage surface exists yet.
+- `components/shared/ContactForm.tsx` and `app/kontakt/page.tsx` include user-facing warnings not to paste pupil names or full raw documentation.
+- Duplicate/rate-limit logs now use a hashed email value, but support operators still need an admin-safe lookup and redaction workflow.
 
 Fix direction:
-- Keep the new support-copy warnings visible and add tests so they do not quietly regress.
-- Add server-side sensitive-content detection for support messages. Reject obvious pupil identifiers or require confirmation after client-side warning.
-- Store support status, triage owner, last handled timestamp, deletion/redaction timestamp, and a minimal request ID.
+- Keep the support-copy warnings and server-side sensitive-content test coverage from regressing.
+- Build the support triage/admin flow around the new status, owner, handled, redacted, deleted, and request ID fields.
 - Add a retention job/runbook and admin-only support workflow. Until then, support storage is an operational liability.
-- Stop logging raw support email addresses in route logs; use `user_id`, request ID, hashed email, or coarse counters.
+- Keep raw support email addresses out of route logs; use `user_id`, request ID, hashed email, or coarse counters.
 
 #### 2. The local/browser data lifecycle is not yet strong enough for school/shared-device reality
 Severity: High
 
 Why it matters:
-The app avoids storing drafting content in the database, but it still stores teacher-written material in browser storage. Drafting notes live in `localStorage` for up to 12 hours. Planning notes, sync queue entries, onboarding state, and planning export/import payloads persist without a global clear path. On shared school computers, this can become the practical privacy failure even if the server architecture is careful.
+The app avoids storing drafting content in the database, but it still stores teacher-written material in browser storage. Drafting notes live in `localStorage` for up to 12 hours. Planning notes, sync queue entries, onboarding state, and planning export/import payloads can also live on the device. The new clear-all control reduces shared-device risk, but the lifecycle still needs an autosave setting and a clearer retention contract.
 
 Evidence:
 - `hooks/useDraftPersistence.ts` persists raw drafting input and custom names in `localStorage`.
-- `components/auth/SignOutButton.tsx` clears only draft storage, not planning checklist storage, planning sync queue storage, or onboarding storage.
+- `components/auth/SignOutButton.tsx` now clears draft, planning checklist, planning sync queue, and onboarding storage through `lib/privacy/local-data.ts`.
 - `hooks/usePlanningChecklist.ts` stores `teacherNotes` and sync queues in `localStorage`.
 - `app/api/planning/checklist/route.ts` stores Pro cloud-sync `teacher_notes` in `planning_checklists`.
-- `lib/planning/checklist-storage.ts` exports/imports planning JSON containing `teacherNotes` with no size cap at file-read time, no explicit sensitivity warning, and no retention contract.
+- `lib/planning/checklist-storage.ts` now caps planning import size, export/import entry count, and teacher-note length; `components/planning/PlanningWorkspace.tsx` warns that exports may contain planning notes.
 
 Fix direction:
-- Add a single "clear all local data" utility covering draft, planning, sync queue, and onboarding keys, and call it from sign-out.
-- Add a Settings privacy section: local autosave on/off, clear local data, explain shared-device risk, and explain what planning cloud sync stores.
+- Keep the single "clear all local data" utility covering draft, planning, sync queue, and onboarding keys wired to sign-out and Settings.
+- Add local autosave on/off controls and deepen the Settings privacy copy around planning cloud sync.
 - Add planning local-data TTL or explicit "keep until cleared" copy.
-- Add import size limits, safer parse errors, and a warning that exported planning JSON may contain sensitive notes.
+- Keep import size limits, safer parse errors, and export warnings covered by tests.
 - Decide whether planning teacher notes should be scrubbed/rejected before cloud sync, or whether the feature is explicitly allowed to store teacher notes under a documented policy.
 
 #### 3. Planning cloud sync is useful, but not yet a reliable synchronization system
@@ -175,9 +186,9 @@ Fix direction:
 - Add smoke tests for auth, AI generation, support validation, planning sync, and billing portal creation.
 
 ### Missing Capabilities For This App Category
-- Privacy controls: local autosave setting, clear all local data, planning cloud-sync storage explanation, export/delete account data, support-message deletion request flow.
+- Privacy controls: local autosave setting, deeper planning cloud-sync storage policy, export/delete account data, support-message deletion request flow. A clear-all local data path now exists.
 - AI governance: prompt/model versioning, golden evals, red-team cases, output warnings, teacher feedback/rating, issue-report-without-content workflow.
-- Support operations: support admin queue, status/owner fields, retention/deletion, notification delivery, abuse dashboard, incident runbook.
+- Support operations: notification delivery, retention automation, abuse dashboard, and broader incident runbooks. A minimal admin queue, status/owner fields, redaction/deletion actions, and support PII runbook now exist.
 - Planning reliability: revisioned sync, server-owned timestamps, deterministic conflict handling, conflict audit history, import/export guardrails.
 - Account management: email change, account deletion, data export, session/device visibility, optional MFA/security settings.
 - Release confidence: staging smoke tests, production smoke tests, accessibility record, live AI provider smoke, uptime/error monitoring.
@@ -185,14 +196,13 @@ Fix direction:
 ### Non-Billing Phased Plan Of Attack
 Phase A: Privacy and data lifecycle hardening
 - Treat support, local drafts, planning local state, planning cloud sync, and exports as first-class data stores.
-- Add warnings, clear-all controls, retention policy, deletion runbooks, and user-facing privacy copy.
-- Add tests for support sensitive-content rejection, local clear-all coverage, planning import size limits, and sign-out cleanup.
+- Implemented baseline: support sensitive-content rejection, hashed support route logs, support lifecycle columns, clear-all controls, sign-out cleanup, planning import/export guardrails, and focused tests.
+- Remaining: retention policy execution, deletion/redaction runbooks, support admin workflow, local autosave setting, and the final policy decision on planning teacher notes in cloud sync.
 
 Phase B: Support and operations
-- Add support request status fields and a minimal admin/support view.
-- Stop logging raw emails; add request IDs and hashed lookup keys.
+- Implemented baseline: support status fields, server-side admin allowlist, minimal admin/support view, assignment, redaction, soft deletion, request IDs, hashed route logs, and support PII runbook.
 - Configure and test route alerts in staging/production.
-- Add incident runbooks for support PII, AI provider failures, planning sync conflicts, and account deletion.
+- Remaining: deployed alert validation, notification delivery, retention automation, abuse dashboard, and incident runbooks for AI provider failures, planning sync conflicts, and account deletion.
 
 Phase C: Planning sync reliability
 - Introduce server-generated revisions and conditional writes.
@@ -214,12 +224,15 @@ Phase E: Account lifecycle and security hardening
 Phase F: Product expansion only after reliability
 - Expand curriculum coverage, OCR/handwritten-note ideas, and new templates after the data lifecycle, support, sync, and AI governance foundations are stable.
 
-Non-billing documentation/content verification on April 26, 2026:
+Non-billing Phase A/B implementation verification on April 26, 2026:
 - `pnpm typecheck`
+- `pnpm lint`
+- `pnpm test -- lib/support/__tests__/admin.test.ts app/api/support/route.test.ts lib/privacy/__tests__/local-data.test.ts lib/planning/__tests__/checklist-storage.test.ts`
+- `pnpm build`
 
 Result:
-- typecheck passed
-- no unit test run was needed for this documentation and copy-only update
+- typecheck, lint, and production build passed
+- Vitest passed with 166 tests. The package script forwarded the path filter as a literal `--`, so the command exercised the full suite rather than only the named files.
 
 Verified on April 23, 2026:
 - `pnpm typecheck`
@@ -255,7 +268,7 @@ Current recommendation:
 | Area | Status | Notes |
 | --- | --- | --- |
 | Core app architecture | Strong | Clear product boundaries, working App Router structure, meaningful middleware and route coverage |
-| Privacy and GDPR model | Partial | Drafting raw notes are still scrubbed client-side and generated output is not stored, but support intake, planning cloud sync, exports, and browser storage need explicit lifecycle hardening |
+| Privacy and GDPR model | Partial | Drafting raw notes are still scrubbed client-side and generated output is not stored. Phase A now covers support rejection, local clear-all, and import/export guardrails, but planning cloud sync policy, retention execution, and admin deletion/redaction workflows remain open |
 | Billing correctness | Partial | The local billing/entitlement design is now much stronger after the April 26 hardening, but live end-to-end Stripe verification is still missing |
 | Testing and CI | Partial | Local quality checks are green, CI is healthy, and Dependabot now covers baseline dependency automation |
 | Security posture | Partial | Good headers, server validation, and baseline support abuse controls exist, and the app now enforces a stronger non-Pro password baseline, but launch-grade auth hardening is still incomplete |
@@ -323,15 +336,15 @@ The biggest spam/abuse blocker on `/api/support` is gone, which is good progress
 Evidence:
 - `app/kontakt/page.tsx:4-40` still exposes the support form publicly.
 - `components/shared/ContactForm.tsx:22-88` now includes a hidden honeypot field.
-- `app/api/support/route.ts:49-98` silently suppresses honeypot spam, duplicate submissions, and repeated bursts from the same email.
+- `app/api/support/route.ts` now suppresses honeypot spam, duplicate submissions, and repeated bursts from the same email, then rejects obvious sensitive content before storage.
 - `lib/support/abuse-protection.ts:20-46` normalizes support emails and enforces the current duplicate and rate-limit heuristics.
-- `support_requests.message` stores the full submitted message, with no retention, redaction, status, owner, or deletion fields.
-- There is still no visible CAPTCHA, IP-aware limiter, abuse dashboard, support admin queue, or support triage runbook in the repo.
+- `support_requests.message` still stores accepted free text, but lifecycle fields, redaction timestamps, deletion timestamps, owner fields, request IDs, and a status timestamp trigger now exist.
+- `/admin/support` and `docs/support-operations.md` provide a minimal triage and redaction workflow. There is still no visible CAPTCHA, IP-aware limiter, abuse dashboard, notification delivery, or automated retention job.
 
 Recommended fix direction:
 - Keep the current abuse protections as the baseline for pilot traffic.
-- Add sensitive-content warnings and server-side sensitive-content checks before support messages are stored.
-- Add retention/deletion fields, support status/owner fields, and a lightweight admin/support workflow.
+- Keep sensitive-content warnings, server-side checks, redaction, and support-admin workflow under regression coverage.
+- Add retention automation, notification delivery, and an abuse dashboard.
 - If spam shows up in practice, add stronger abuse controls such as IP-aware throttling or a higher-friction challenge.
 
 ### 4. Planning sync is still honest for MVP, but not strong enough for a production-grade reliability promise
@@ -388,15 +401,16 @@ Recommended fix direction:
 - Live Stripe test-mode verification is still pending.
 - The new webhook-ready alert path still needs to be connected to a real incident channel and validated in a live environment.
 - Planning sync semantics are still intentionally shallow for multi-device confidence.
-- Support intake, planning cloud sync, local planning storage, and planning exports still need explicit privacy/data-lifecycle hardening.
+- Support intake, local planning storage, and planning exports now have baseline Phase A privacy controls; support retention/admin workflows and planning cloud sync policy still need completion.
 - `lib/stripe/server.ts:3-10` still hardcodes and force-casts the Stripe API version.
 - `lib/billing/entitlements.ts:13-74` still leaves the meaning of `cancelled` somewhat implicit.
-- Browser persistence still lacks one global privacy control for drafts, planning state, sync queues, and onboarding state.
+- Browser persistence now has one global clear-all control for drafts, planning state, sync queues, and onboarding state; a user-level autosave setting is still open.
 
 ### Partially Fixed
 - Planning reliability is better than before, but still best-effort rather than revisioned.
 - Billing correctness is better than before, but it still lacks live end-to-end proof in a real test environment.
 - Support abuse posture is better than before, but it is still intentionally lightweight rather than operations-grade.
+- Support privacy posture is better after server-side sensitive-content rejection, lifecycle fields, hashed route logs, admin triage, redaction, soft deletion, and a support runbook. Retention automation and live operations validation are still missing.
 - Operational visibility is better than before because key public routes now share request IDs, structured logs, and a sanitized webhook-ready alert path, but the live monitoring/incident loop is still not proven.
 - Documentation alignment is much better because `README.md`, `docs/audit.md`, `docs/billing-security.md`, and `docs/roadmap` now point in the same direction, and `docs/design` has been reduced to an archive pointer.
 
@@ -415,8 +429,8 @@ Recommended fix direction:
 
 ## Should-Have Functionality Before Production
 - Real error monitoring and alerting for auth, AI, support, and Stripe webhook failures.
-- Privacy/data-lifecycle controls for support messages, local browser storage, planning cloud sync, and planning exports.
-- Support triage workflow with retention, deletion, and redaction handling.
+- Complete privacy/data-lifecycle controls for support messages, local browser storage, planning cloud sync, and planning exports. Phase A now covers baseline controls, but not the full retention/admin policy.
+- Support triage workflow with retention, deletion, and redaction handling. A minimal workflow now exists; retention automation still needs confirmation and implementation.
 - AI prompt/model versioning plus a small evaluation suite for sensitive-content and hallucination regressions.
 - One completed accessibility pass for the primary desktop/browser flows recorded in this audit.
 - One completed live Stripe test-mode verification recorded in this audit.

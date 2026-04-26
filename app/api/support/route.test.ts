@@ -68,7 +68,9 @@ describe("/api/support", () => {
       email: "larare@skola.se",
       message: "Jag behöver hjälp med ett tekniskt problem i skrivstationen.",
       name: "Anna Andersson",
+      request_id: expect.any(String),
       role: "Klasslärare",
+      status: "new",
       topic: "Tekniskt problem",
       user_id: null,
     });
@@ -125,10 +127,36 @@ describe("/api/support", () => {
       email: "larare@skola.se",
       message: "Jag undrar hur cloudsync fungerar för planering.",
       name: "Anna Andersson",
+      request_id: expect.any(String),
       role: null,
+      status: "new",
       topic: "Allmän fråga",
       user_id: "user-123",
     });
+  });
+
+  it("rejects support messages that still contain obvious personal data", async () => {
+    const { POST } = await import("@/app/api/support/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/support", {
+        body: JSON.stringify({
+          email: "larare@skola.se",
+          message: "Eleven Anna har personnummer 20120101-1234 och jag behÃ¶ver support.",
+          name: "LÃ¤rare Test",
+          role: "KlasslÃ¤rare",
+          topic: "Tekniskt problem",
+        }),
+        method: "POST",
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    await expect(response.json()).resolves.toEqual({
+      error: expect.stringContaining("personuppgifter"),
+    });
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it("silently accepts honeypot submissions without storing them", async () => {
@@ -192,6 +220,7 @@ describe("/api/support", () => {
   });
 
   it("suppresses duplicate submissions instead of storing them twice", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
     mockGte.mockResolvedValue({
       data: [
         {
@@ -223,6 +252,14 @@ describe("/api/support", () => {
       ok: true,
       message: "Tack. Ditt meddelande är mottaget och ligger nu i vår supportinkorg.",
     });
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Suppressed duplicate support submission."),
+      expect.objectContaining({
+        emailHash: expect.any(String),
+      }),
+    );
+    expect(infoSpy.mock.calls[0]?.[1]).not.toHaveProperty("email");
     expect(mockInsert).not.toHaveBeenCalled();
+    infoSpy.mockRestore();
   });
 });

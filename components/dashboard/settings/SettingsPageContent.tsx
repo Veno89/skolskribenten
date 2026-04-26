@@ -1,6 +1,7 @@
 import { updateSettingsAction } from "@/app/(dashboard)/installningar/actions";
 import { AuthNotice } from "@/components/auth/AuthNotice";
 import { AuthSubmitButton } from "@/components/auth/AuthSubmitButton";
+import { ClearLocalDataButton } from "@/components/dashboard/settings/ClearLocalDataButton";
 import { Input } from "@/components/ui/input";
 import type { AuthMessageType } from "@/lib/auth/redirects";
 import { cn } from "@/lib/utils";
@@ -257,6 +258,23 @@ export function SettingsPageContent(props: SettingsPageContentProps): JSX.Elemen
                 Inställningarna sparas i din profil och används nästa gång du genererar text i
                 skrivstationen.
               </p>
+            </div>
+          </section>
+
+          <section className="ss-card p-8">
+            <p className="text-sm uppercase tracking-[0.26em] text-[var(--ss-primary)]">
+              Lokal integritet
+            </p>
+            <div className="mt-5 space-y-4 text-sm leading-7 text-[var(--ss-neutral-800)]">
+              <p>
+                Den här webbläsaren kan spara tillfälliga utkast, planeringsanteckningar,
+                synkköer och onboardingstatus lokalt så att arbetet går att återställa.
+              </p>
+              <p>
+                På delade enheter bör du rensa lokal data när du är klar. Cloudsyncade
+                planeringsanteckningar och supportmeddelanden raderas inte av den här knappen.
+              </p>
+              <ClearLocalDataButton />
             </div>
           </section>
         </aside>

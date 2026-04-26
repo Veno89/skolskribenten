@@ -5,16 +5,15 @@ Last updated: April 26, 2026.
 This roadmap tracks current product and security priorities. `docs/audit.md` is still the detailed source of truth; this file is the short operational map.
 
 ## Phase A: Privacy And Data Lifecycle
-- Make support intake safe for a privacy-sensitive school product: warnings, sensitive-content checks, retention, deletion, and triage fields.
-- Add a single "clear all local data" path for drafting, planning, sync queue, and onboarding browser storage.
-- Add a Settings privacy section for local autosave, shared-device risk, planning cloud sync, exports, and support-message handling.
-- Tighten user-facing privacy copy so "never stored" applies specifically to drafting raw notes and generated AI output, with explicit planning/support exceptions.
+- Landed baseline: support warnings, server-side sensitive-content rejection, lifecycle columns, hashed route logs, clear-all local data, sign-out cleanup, Settings privacy copy, and planning import/export guardrails.
+- Remaining: local autosave setting, support retention/deletion execution, admin triage workflow, and a final cloud-sync policy for planning teacher notes.
+- Keep user-facing privacy copy precise: "never stored" applies specifically to drafting raw notes and generated AI output, with explicit planning/support exceptions.
 
 ## Phase B: Support And Operations
-- Add a support/admin queue with status, owner, handled timestamp, deletion/redaction timestamp, and request IDs.
-- Stop writing raw support emails to route logs; use request IDs, user IDs, hashes, or aggregate counters.
+- Landed baseline: server-side `app_admins` allowlist, `/admin/support` queue, status filters, assignment, redaction, soft deletion, and support operations runbook.
+- Keep raw support emails out of route logs; use request IDs, user IDs, hashes, or aggregate counters.
 - Configure and test `OPS_ALERT_WEBHOOK_URL` in deployed environments.
-- Add runbooks for support PII, AI provider failures, planning sync conflicts, account deletion, and release rollback.
+- Remaining: deployed alert validation, support retention automation, support notification delivery, abuse dashboard, and runbooks for AI provider failures, planning sync conflicts, account deletion, and release rollback.
 
 ## Phase C: Planning Sync Reliability
 - Replace timestamp-only conflict detection with server-generated revisions and conditional writes.

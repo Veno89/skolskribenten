@@ -25,7 +25,7 @@ export interface PlanningSyncQueueItem extends PlanningSyncStateSnapshot {
   subjectId: string;
 }
 
-const SYNC_QUEUE_PREFIX = "skolskribenten:planning-sync-queue:";
+export const SYNC_QUEUE_PREFIX = "skolskribenten:planning-sync-queue:";
 
 function isQueueStatus(value: unknown): value is PlanningSyncQueueStatus {
   return value === "pending" || value === "failed" || value === "conflict";
