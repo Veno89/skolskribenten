@@ -53,6 +53,8 @@ Phase B implementation update:
 - `supabase/migrations/016_support_admin_operations.sql` adds a server-side `app_admins` allowlist for privileged support operations.
 - `/admin/support` now provides an admin-gated support queue with open/status filters, assignment, status updates, redaction, and soft deletion.
 - Support destructive actions require explicit confirmation and replace stored message/contact content with placeholders instead of spreading it into logs or external tools.
+- New support intake can emit a sanitized info event to `OPS_ALERT_WEBHOOK_URL` without submitted name, email, role, or message text.
+- `pnpm support:retention` and `pnpm support:retention:repair` provide dry-run-first soft deletion for resolved/spam support rows older than the retention cutoff.
 - `docs/support-operations.md` now defines admin access, status meanings, triage, redaction, deletion, retention, and incident handling.
 
 ### Highest-Priority Findings
@@ -188,7 +190,7 @@ Fix direction:
 ### Missing Capabilities For This App Category
 - Privacy controls: local autosave setting, deeper planning cloud-sync storage policy, export/delete account data, support-message deletion request flow. A clear-all local data path now exists.
 - AI governance: prompt/model versioning, golden evals, red-team cases, output warnings, teacher feedback/rating, issue-report-without-content workflow.
-- Support operations: notification delivery, retention automation, abuse dashboard, and broader incident runbooks. A minimal admin queue, status/owner fields, redaction/deletion actions, and support PII runbook now exist.
+- Support operations: deployed notification validation, scheduled retention automation, abuse dashboard, and broader incident runbooks. A minimal admin queue, status/owner fields, redaction/deletion actions, sanitized notifications, retention tooling, and support PII runbook now exist.
 - Planning reliability: revisioned sync, server-owned timestamps, deterministic conflict handling, conflict audit history, import/export guardrails.
 - Account management: email change, account deletion, data export, session/device visibility, optional MFA/security settings.
 - Release confidence: staging smoke tests, production smoke tests, accessibility record, live AI provider smoke, uptime/error monitoring.
@@ -200,9 +202,9 @@ Phase A: Privacy and data lifecycle hardening
 - Remaining: retention policy execution, deletion/redaction runbooks, support admin workflow, local autosave setting, and the final policy decision on planning teacher notes in cloud sync.
 
 Phase B: Support and operations
-- Implemented baseline: support status fields, server-side admin allowlist, minimal admin/support view, assignment, redaction, soft deletion, request IDs, hashed route logs, and support PII runbook.
+- Implemented baseline: support status fields, server-side admin allowlist, minimal admin/support view, assignment, redaction, soft deletion, request IDs, hashed route logs, sanitized support notifications, retention tooling, and support PII runbook.
 - Configure and test route alerts in staging/production.
-- Remaining: deployed alert validation, notification delivery, retention automation, abuse dashboard, and incident runbooks for AI provider failures, planning sync conflicts, and account deletion.
+- Remaining: deployed alert validation, scheduled retention automation, abuse dashboard, and incident runbooks for AI provider failures, planning sync conflicts, and account deletion.
 
 Phase C: Planning sync reliability
 - Introduce server-generated revisions and conditional writes.
@@ -227,12 +229,13 @@ Phase F: Product expansion only after reliability
 Non-billing Phase A/B implementation verification on April 26, 2026:
 - `pnpm typecheck`
 - `pnpm lint`
-- `pnpm test -- lib/support/__tests__/admin.test.ts app/api/support/route.test.ts lib/privacy/__tests__/local-data.test.ts lib/planning/__tests__/checklist-storage.test.ts`
+- `pnpm test -- lib/server/__tests__/operational-alerts.test.ts lib/support/__tests__/admin.test.ts app/api/support/route.test.ts`
+- `node --check scripts/retention-support.mjs`
 - `pnpm build`
 
 Result:
-- typecheck, lint, and production build passed
-- Vitest passed with 166 tests. The package script forwarded the path filter as a literal `--`, so the command exercised the full suite rather than only the named files.
+- typecheck, lint, retention script syntax check, and production build passed
+- Vitest passed with 167 tests. The package script forwarded the path filter as a literal `--`, so the command exercised the full suite rather than only the named files.
 
 Verified on April 23, 2026:
 - `pnpm typecheck`

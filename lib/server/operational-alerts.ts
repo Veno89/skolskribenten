@@ -12,7 +12,7 @@ export interface OperationalAlertPayload {
   event: {
     details?: LogDetails;
     error?: OperationalErrorSummary;
-    level: "error";
+    level: "error" | "info";
     message: string;
   };
   route: {
@@ -129,6 +129,24 @@ export function buildOperationalAlertPayload(
   details?: LogDetails,
   error?: unknown,
 ): OperationalAlertPayload {
+  return buildOperationalEventPayload(context, "error", message, details, error);
+}
+
+export function buildOperationalInfoPayload(
+  context: RouteContext,
+  message: string,
+  details?: LogDetails,
+): OperationalAlertPayload {
+  return buildOperationalEventPayload(context, "info", message, details);
+}
+
+function buildOperationalEventPayload(
+  context: RouteContext,
+  level: "error" | "info",
+  message: string,
+  details?: LogDetails,
+  error?: unknown,
+): OperationalAlertPayload {
   const sanitizedDetails = sanitizeDetails(details);
   const errorSummary = summarizeErrorForOps(error);
 
@@ -137,7 +155,7 @@ export function buildOperationalAlertPayload(
     event: {
       ...(sanitizedDetails ? { details: sanitizedDetails } : {}),
       ...(errorSummary ? { error: errorSummary } : {}),
-      level: "error",
+      level,
       message,
     },
     route: {
@@ -191,6 +209,30 @@ export function queueOperationalErrorAlert(
 
   void sendOperationalAlert(payload, webhookUrl).catch((deliveryError) => {
     console.error("[Ops] Failed to deliver operational alert.", {
+      deliveryError: summarizeDeliveryError(deliveryError),
+      method: context.method,
+      path: context.pathname,
+      requestId: context.requestId,
+      routeName: context.routeName,
+    });
+  });
+}
+
+export function queueOperationalInfoAlert(
+  context: RouteContext,
+  message: string,
+  details?: LogDetails,
+): void {
+  const webhookUrl = process.env.OPS_ALERT_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    return;
+  }
+
+  const payload = buildOperationalInfoPayload(context, message, details);
+
+  void sendOperationalAlert(payload, webhookUrl).catch((deliveryError) => {
+    console.error("[Ops] Failed to deliver operational info event.", {
       deliveryError: summarizeDeliveryError(deliveryError),
       method: context.method,
       path: context.pathname,

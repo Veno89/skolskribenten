@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildOperationalAlertPayload,
+  buildOperationalInfoPayload,
   sendOperationalAlert,
 } from "@/lib/server/operational-alerts";
 import type { RouteContext } from "@/lib/server/request-context";
@@ -96,6 +97,30 @@ describe("operational alerts", () => {
         requestId: "req_123",
       },
       source: "skolskribenten",
+    });
+  });
+
+  it("builds sanitized info events for support notifications", () => {
+    const payload = buildOperationalInfoPayload(
+      context,
+      "New support request received.",
+      {
+        email: "larare@skola.se",
+        message: "Do not send this",
+        supportRequestId: "req_123",
+        topic: "Tekniskt problem",
+        userId: "user-123",
+      },
+    );
+
+    expect(payload.event).toEqual({
+      details: {
+        supportRequestId: "req_123",
+        topic: "Tekniskt problem",
+        userId: "user-123",
+      },
+      level: "info",
+      message: "New support request received.",
     });
   });
 

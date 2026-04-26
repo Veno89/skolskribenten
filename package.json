@@ -11,7 +11,9 @@
     "lint": "next lint",
     "test": "vitest run",
     "billing:reconcile": "node scripts/reconcile-stripe.mjs",
-    "billing:reconcile:repair": "node scripts/reconcile-stripe.mjs --repair"
+    "billing:reconcile:repair": "node scripts/reconcile-stripe.mjs --repair",
+    "support:retention": "node scripts/retention-support.mjs",
+    "support:retention:repair": "node scripts/retention-support.mjs --repair"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

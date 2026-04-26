@@ -77,7 +77,42 @@ Current conservative operating policy:
 - Review resolved/spam support requests at least monthly.
 - Soft-delete resolved/spam requests older than 90 days unless there is an active billing, legal, abuse, or product-investigation reason to retain them.
 
-This policy still needs human confirmation before automating deletion.
+Dry-run candidates:
+
+```bash
+pnpm support:retention
+```
+
+Apply soft deletion:
+
+```bash
+pnpm support:retention:repair
+```
+
+Optional flags:
+- `--days=120` changes the retention window.
+- `--limit=100` caps the number of rows processed in one run.
+
+The job only selects `resolved` and `spam` rows where `deleted_at is null` and `last_status_at` is older than the cutoff. It replaces contact/message fields with placeholders and keeps the row for auditability.
+
+This policy still needs human confirmation before scheduling automatic deletion.
+
+## Notifications
+
+When `/api/support` stores a new request, it queues a sanitized info event to `OPS_ALERT_WEBHOOK_URL` if configured.
+
+The event may include:
+- route name
+- request ID
+- support request ID
+- topic
+- user ID or `anonymous`
+
+It must not include:
+- support message text
+- submitted name
+- submitted email
+- role/school details
 
 ## Investigating Support Bugs
 

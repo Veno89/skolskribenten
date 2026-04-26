@@ -5,6 +5,7 @@ import {
   logRouteError,
   logRouteInfo,
 } from "@/lib/server/request-context";
+import { queueOperationalInfoAlert } from "@/lib/server/operational-alerts";
 import {
   getSupportRateLimitWindowStart,
   hasExceededSupportRateLimit,
@@ -139,6 +140,12 @@ export async function POST(req: NextRequest): Promise<Response> {
         context,
       );
     }
+
+    queueOperationalInfoAlert(context, "New support request received.", {
+      supportRequestId: context.requestId,
+      topic: parsed.data.topic,
+      userId: userId ?? "anonymous",
+    });
   } catch (error) {
     logRouteError(context, "Failed to create support request.", error);
     return jsonWithContext(

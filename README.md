@@ -136,6 +136,7 @@ Notes:
 - the app uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` with `NEXT_PUBLIC_SUPABASE_ANON_KEY` as a fallback
 - the server admin client uses `SUPABASE_SECRET_KEY` with `SUPABASE_SERVICE_ROLE_KEY` as a fallback
 - `OPS_ALERT_WEBHOOK_URL` is optional and forwards sanitized route failures plus request IDs to your incident channel
+- the same operations webhook can receive sanitized support intake notifications; it never receives support message text, names, or email addresses
 - Stripe price IDs are server allowlist config; browsers never choose raw Stripe prices
 - omit `STRIPE_API_VERSION` unless deliberately pinning an API version supported by the installed Stripe SDK
 
@@ -158,6 +159,15 @@ Billing reconciliation:
 pnpm billing:reconcile
 pnpm billing:reconcile:repair
 ```
+
+Support retention:
+
+```bash
+pnpm support:retention
+pnpm support:retention:repair
+```
+
+The support retention command defaults to a dry run and only soft-deletes resolved/spam support rows older than 90 days by `last_status_at`.
 
 ## Database Notes
 
