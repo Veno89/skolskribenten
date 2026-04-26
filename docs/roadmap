@@ -24,10 +24,10 @@ This roadmap tracks current product and security priorities. `docs/audit.md` is 
 - Keep product copy honest: this is revisioned backup/sync, not collaboration-grade real-time editing.
 
 ## Phase D: AI Quality And Safety
-- Version prompts/models in usage metadata.
-- Add a golden eval and red-team suite for Swedish school documentation, placeholder preservation, and hallucination resistance.
-- Add post-generation suspicious-output checks or warnings before copy/export.
-- Add provider timeout/cancel handling and a live AI smoke test with synthetic scrubbed input.
+- Landed baseline: `usage_events` now records AI provider/model, prompt version, output-guard version, guard pass/fail state, and non-content warning labels.
+- Landed guardrail: `/api/ai` assembles generated text server-side, blocks obvious reintroduced identifiers or new person placeholders before returning output, and releases reserved quota on blocked output.
+- Landed eval support: synthetic fixtures and tests cover prompt clauses, placeholder preservation, guard blocking, warning headers, and blocked-output usage metadata.
+- Remaining: expand the golden/red-team suite, add provider timeout/cancel classification, add live AI smoke tests with synthetic scrubbed input, and create admin/debug visibility for guard failures and warning rates.
 
 ## Phase E: Account And Security Maturity
 - Add email change, account deletion, data export, and session/security settings.

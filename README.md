@@ -8,6 +8,7 @@ Current repo status:
 - `docs/roadmap` is the short current roadmap
 - `docs/support-operations.md` is the support triage and privacy runbook
 - `docs/planning-sync-operations.md` is the planning sync conflict and drift runbook
+- `docs/ai-governance.md` is the AI prompt, output-guard, and eval operations note
 - `docs/design` is now only a historical archive pointer, not implementation truth
 
 ## Core Promise
@@ -69,7 +70,7 @@ Skolskribenten is built around a strict GDPR-conscious flow:
 1. The teacher writes notes in the browser.
 2. The GDPR scrubber replaces names and other identifiers locally.
 3. Only the scrubbed text is sent to `/api/ai`.
-4. The AI response is streamed back to the browser.
+4. The server re-scrubs the text, checks it for obvious identifiers, generates the AI response, and runs an output guard before returning it.
 5. The database stores usage metadata and app state. Drafting raw notes and generated AI output are not stored, but planning cloud-sync notes and support messages are explicit exceptions that need careful handling.
 
 This is the product's most important architectural rule.
@@ -176,7 +177,7 @@ The support retention command defaults to a dry run and only soft-deletes resolv
 Supabase migrations live in `supabase/migrations/`.
 
 The current local migration set runs through:
-- `017_revisioned_planning_sync.sql`
+- `018_ai_governance_metadata.sql`
 
 The live app expects at least:
 - `profiles`
@@ -185,6 +186,7 @@ The live app expects at least:
 - `support_requests`
 - `app_admins`
 - `planning_sync_conflicts`
+- AI governance metadata columns on `usage_events`
 - RLS policies
 - the generation-attempt quota functions
 - the revisioned planning-sync RPC
@@ -197,6 +199,7 @@ Implemented now:
 - marketing, legal, auth, settings, and account surfaces
 - drafting station with GDPR scrubber, rendered output, and local draft recovery
 - planning workspace with checklist state, cloud sync, conflict handling, import/export, and direct AI generation
+- AI generation with server-side sensitive-content checks, output guard, prompt/model metadata, and synthetic eval coverage
 - recurring and one-time billing flows
 - recurring billing portal access
 - server-side support intake

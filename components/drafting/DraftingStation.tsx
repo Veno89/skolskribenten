@@ -41,6 +41,7 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
     error,
     generateDocument,
     isLoading,
+    outputWarnings,
     resetGenerationState,
     scrubberStats,
     unmatchedWarnings,
@@ -176,6 +177,7 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
             completion={completion}
             isLoading={isLoading}
             error={error?.message}
+            warnings={outputWarnings}
             templateType={selectedTemplate}
           />
         </div>

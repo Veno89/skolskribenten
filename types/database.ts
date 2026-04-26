@@ -560,10 +560,16 @@ export interface Database {
       };
       usage_events: {
         Row: {
+          ai_model: string;
+          ai_provider: string;
           client_reported_pii_tokens_removed: number;
           created_at: string;
           id: string;
+          output_guard_passed: boolean;
+          output_guard_version: string;
+          output_guard_warnings: string[];
           pii_tokens_removed: number;
+          prompt_version: string;
           scrubber_ran: boolean;
           server_pii_check_passed: boolean;
           template_type:
@@ -576,10 +582,16 @@ export interface Database {
           user_id: string;
         };
         Insert: {
+          ai_model?: string;
+          ai_provider?: string;
           client_reported_pii_tokens_removed?: number;
           created_at?: string;
           id?: string;
+          output_guard_passed?: boolean;
+          output_guard_version?: string;
+          output_guard_warnings?: string[];
           pii_tokens_removed?: number;
+          prompt_version?: string;
           scrubber_ran?: boolean;
           server_pii_check_passed?: boolean;
           template_type:
@@ -592,10 +604,16 @@ export interface Database {
           user_id: string;
         };
         Update: {
+          ai_model?: string;
+          ai_provider?: string;
           client_reported_pii_tokens_removed?: number;
           created_at?: string;
           id?: string;
+          output_guard_passed?: boolean;
+          output_guard_version?: string;
+          output_guard_warnings?: string[];
           pii_tokens_removed?: number;
+          prompt_version?: string;
           scrubber_ran?: boolean;
           server_pii_check_passed?: boolean;
           template_type?:

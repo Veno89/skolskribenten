@@ -11,6 +11,7 @@ interface Props {
   isLoading: boolean;
   error?: string;
   templateType: TemplateType;
+  warnings?: string[];
 }
 
 /**
@@ -45,6 +46,7 @@ export function OutputPanel({
   isLoading,
   error,
   templateType,
+  warnings = [],
 }: Props): JSX.Element {
   const [copyStatus, setCopyStatus] = useState<"idle" | "done" | "failed">("idle");
   const renderedRef = useRef<HTMLDivElement>(null);
@@ -94,6 +96,17 @@ export function OutputPanel({
         {error ? (
           <div className="rounded-[1.25rem] border border-red-200 bg-red-50 p-4 text-sm leading-7 text-red-800">
             Något gick fel: {error}
+          </div>
+        ) : null}
+
+        {!error && warnings.length > 0 ? (
+          <div className="mb-4 rounded-[1.25rem] border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-900">
+            <p className="font-medium">Granska AI-svaret extra noggrant</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
           </div>
         ) : null}
 

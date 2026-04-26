@@ -17,16 +17,19 @@ interface UseCompletionResult {
   isLoading: boolean;
   error?: Error;
   reset: () => void;
+  warnings: string[];
 }
 
 export function useCompletion({ api }: UseCompletionOptions): UseCompletionResult {
   const [completion, setCompletion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const reset = () => {
     setCompletion("");
     setError(undefined);
+    setWarnings([]);
   };
 
   const complete = async (
@@ -36,6 +39,7 @@ export function useCompletion({ api }: UseCompletionOptions): UseCompletionResul
     setCompletion("");
     setIsLoading(true);
     setError(undefined);
+    setWarnings([]);
 
     try {
       const response = await fetch(api, {
@@ -64,6 +68,21 @@ export function useCompletion({ api }: UseCompletionOptions): UseCompletionResul
 
       if (!reader) {
         throw new Error("Inget svar mottogs från servern.");
+      }
+
+      const warningHeader = response.headers.get("x-skolskribenten-output-warnings");
+
+      if (warningHeader) {
+        try {
+          const parsedWarnings = JSON.parse(warningHeader) as unknown;
+          setWarnings(
+            Array.isArray(parsedWarnings)
+              ? parsedWarnings.filter((value): value is string => typeof value === "string")
+              : [],
+          );
+        } catch {
+          setWarnings(["AI-svaret kunde inte granskas fullt ut. Läs igenom texten extra noggrant."]);
+        }
       }
 
       const decoder = new TextDecoder();
@@ -101,5 +120,6 @@ export function useCompletion({ api }: UseCompletionOptions): UseCompletionResul
     isLoading,
     error,
     reset,
+    warnings,
   };
 }

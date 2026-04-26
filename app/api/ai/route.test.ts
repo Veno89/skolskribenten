@@ -233,8 +233,117 @@ describe("/api/ai", () => {
     expect(mockUsageInsert).toHaveBeenCalledTimes(1);
     expect(mockUsageInsert).toHaveBeenCalledWith(
       expect.objectContaining({
+        ai_model: expect.any(String),
+        ai_provider: "anthropic",
+        output_guard_passed: true,
+        output_guard_version: expect.stringContaining("output-guard"),
+        output_guard_warnings: [],
+        prompt_version: expect.stringContaining("prompt"),
         template_type: "lektionsplanering",
         user_id: "user-123",
+      }),
+    );
+  });
+
+  it("returns non-blocking output guard warnings in headers and usage metadata", async () => {
+    mockAnthropicStream.mockResolvedValue(
+      (async function* streamChunks() {
+        yield {
+          type: "content_block_delta",
+          delta: {
+            type: "text_delta",
+            text: "Eleven deltog aktivt i genomgÃ¥ngen.",
+          },
+        };
+      })(),
+    );
+
+    const { POST } = await import("@/app/api/ai/route");
+    const response = await POST(
+      new Request("http://localhost/api/ai", {
+        method: "POST",
+        body: JSON.stringify({
+          templateType: "larlogg",
+          scrubbedInput: "[Elev 1] deltog aktivt i genomgÃ¥ngen med gruppen.",
+          scrubberStats: {
+            namesReplaced: 1,
+            piiTokensReplaced: 0,
+          },
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    const warnings = JSON.parse(
+      response.headers.get("x-skolskribenten-output-warnings") ?? "[]",
+    ) as string[];
+    expect(warnings).toEqual(expect.arrayContaining([expect.stringContaining("[Elev 1]")]));
+    expect(mockUsageInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        output_guard_passed: true,
+        output_guard_warnings: expect.arrayContaining([expect.stringContaining("[Elev 1]")]),
+      }),
+    );
+  });
+
+  it("blocks generated output that reintroduces personal data and releases the reserved transform", async () => {
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === "begin_generation_attempt") {
+        return {
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: buildAttemptResult({
+              reserved_transform: true,
+            }),
+            error: null,
+          }),
+        };
+      }
+
+      return { error: null };
+    });
+    mockDetectPotentialSensitiveContent
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([{ type: "known_name", matches: ["Erik"] }]);
+    mockAnthropicStream.mockResolvedValue(
+      (async function* streamChunks() {
+        yield {
+          type: "content_block_delta",
+          delta: {
+            type: "text_delta",
+            text: "Erik deltog aktivt.",
+          },
+        };
+      })(),
+    );
+
+    const { POST } = await import("@/app/api/ai/route");
+    const response = await POST(
+      new Request("http://localhost/api/ai", {
+        method: "POST",
+        body: JSON.stringify({
+          templateType: "larlogg",
+          scrubbedInput: "[Elev 1] deltog aktivt i genomgÃ¥ngen med gruppen.",
+          scrubberStats: {
+            namesReplaced: 1,
+            piiTokensReplaced: 0,
+          },
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: "OUTPUT_GUARD_BLOCKED",
+      }),
+    );
+    expect(mockRpc).toHaveBeenCalledWith("release_generation_attempt", {
+      p_user_id: "user-123",
+    });
+    expect(mockUsageInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        output_guard_passed: false,
+        output_guard_warnings: expect.arrayContaining([expect.stringContaining("personuppgifter")]),
       }),
     );
   });

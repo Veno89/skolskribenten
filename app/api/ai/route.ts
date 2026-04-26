@@ -1,7 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { CLAUDE_PRIMARY_MODEL, TEMPLATE_TYPES } from "@/lib/ai/provider";
+import { getAiGovernanceMetadata } from "@/lib/ai/governance";
+import {
+  serializeOutputGuardWarnings,
+  validateAiOutput,
+} from "@/lib/ai/output-guard";
+import { CLAUDE_PRIMARY_MODEL, TEMPLATE_TYPES, type TemplateType } from "@/lib/ai/provider";
 import { getSystemPrompt } from "@/lib/ai/prompts";
 import {
   FREE_TRANSFORM_LIMIT,
@@ -18,6 +23,7 @@ import {
   createRouteContext,
   jsonWithContext,
   logRouteError,
+  logRouteInfo,
   withRequestContext,
 } from "@/lib/server/request-context";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -291,6 +297,34 @@ async function releaseGenerationAttempt(
   }
 }
 
+async function recordUsageEvent(params: {
+  adminSupabase: AdminClient;
+  clientReportedPiiTokensRemoved: number;
+  context: RouteContext;
+  governanceMetadata: ReturnType<typeof getAiGovernanceMetadata>;
+  outputGuardPassed: boolean;
+  outputGuardWarnings: string[];
+  templateType: TemplateType;
+  totalPiiTokensRemoved: number;
+  userId: string;
+}): Promise<void> {
+  const { error } = await params.adminSupabase.from("usage_events").insert({
+    ...params.governanceMetadata,
+    user_id: params.userId,
+    template_type: params.templateType,
+    scrubber_ran: true,
+    pii_tokens_removed: params.totalPiiTokensRemoved,
+    client_reported_pii_tokens_removed: params.clientReportedPiiTokensRemoved,
+    server_pii_check_passed: true,
+    output_guard_passed: params.outputGuardPassed,
+    output_guard_warnings: params.outputGuardWarnings.slice(0, 10),
+  });
+
+  if (error) {
+    logRouteError(params.context, "Failed to record AI usage event.", error);
+  }
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
   const context = createRouteContext(req, "ai");
   const supabase = createClient();
@@ -369,7 +403,6 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const encoder = new TextEncoder();
   const reservedTransform = generationAttempt.reserved_transform;
   const clientReportedPiiTokensRemoved =
     scrubberStats.namesReplaced + scrubberStats.piiTokensReplaced;
@@ -378,61 +411,109 @@ export async function POST(req: NextRequest): Promise<Response> {
   const totalPiiTokensRemoved = clientReportedPiiTokensRemoved + serverAddedPiiTokensRemoved;
   const userSettings = parseUserSettings(generationAttempt.user_settings);
   const systemPrompt = getSystemPrompt(templateType, { userSettings });
+  const governanceMetadata = getAiGovernanceMetadata();
+  let generatedText = "";
 
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        const claudeStream = await anthropic.messages.stream({
-          model: CLAUDE_PRIMARY_MODEL,
-          max_tokens: 2048,
-          system: systemPrompt,
-          messages: [
-            {
-              role: "user",
+  try {
+    const claudeStream = await anthropic.messages.stream({
+      model: CLAUDE_PRIMARY_MODEL,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
               content: `Här är lärarens anteckningar (all personinformation är borttagen av GDPR-skölden):\n\n${effectiveScrubbedInput}`,
-            },
-          ],
-        });
+        },
+      ],
+    });
 
-        for await (const chunk of claudeStream) {
-          if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
-            controller.enqueue(encoder.encode(chunk.delta.text));
-          }
-        }
-      } catch (error) {
-        if (reservedTransform) {
-          await releaseGenerationAttempt(adminSupabase, user.id, context);
-        }
-
-        logRouteError(context, "Generation failed.", error);
-        controller.error(error);
-        return;
+    for await (const chunk of claudeStream) {
+      if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+        generatedText += chunk.delta.text;
       }
+    }
+  } catch (error) {
+    if (reservedTransform) {
+      await releaseGenerationAttempt(adminSupabase, user.id, context);
+    }
 
-      const { error: usageError } = await adminSupabase.from("usage_events").insert({
-        user_id: user.id,
-        template_type: templateType,
-        scrubber_ran: true,
-        pii_tokens_removed: totalPiiTokensRemoved,
-        client_reported_pii_tokens_removed: clientReportedPiiTokensRemoved,
-        server_pii_check_passed: true,
-      });
+    logRouteError(context, "Generation failed.", error);
+    return jsonWithContext(
+          { error: "Genereringen misslyckades. Försök igen om en stund." },
+      { status: 502 },
+      context,
+    );
+  }
 
-      if (usageError) {
-        logRouteError(context, "Failed to record usage event.", usageError);
-      }
-
-      controller.close();
-    },
+  const outputGuardResult = validateAiOutput({
+    inputText: effectiveScrubbedInput,
+    outputText: generatedText,
   });
 
-  return withRequestContext(
-    new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
+  if (!outputGuardResult.passed) {
+    if (reservedTransform) {
+      await releaseGenerationAttempt(adminSupabase, user.id, context);
+    }
+
+    await recordUsageEvent({
+      adminSupabase,
+      clientReportedPiiTokensRemoved,
+      context,
+      governanceMetadata,
+      outputGuardPassed: false,
+      outputGuardWarnings: [
+        ...outputGuardResult.blockingReasons,
+        ...outputGuardResult.warnings,
+      ],
+      templateType,
+      totalPiiTokensRemoved,
+      userId: user.id,
+    });
+
+    logRouteInfo(context, "Blocked AI output after post-generation validation.", {
+      blockingReasonCount: outputGuardResult.blockingReasons.length,
+      outputPlaceholderCount: outputGuardResult.outputPlaceholders.length,
+      requiredPlaceholderCount: outputGuardResult.requiredPlaceholders.length,
+      warningCount: outputGuardResult.warnings.length,
+    });
+
+    return jsonWithContext(
+      {
+            error: "AI-svaret stoppades eftersom det kan innehålla personuppgifter eller nya elevmarkörer. Försök igen med tydligare avidentifierat underlag.",
+        code: "OUTPUT_GUARD_BLOCKED",
       },
+      { status: 502 },
+      context,
+    );
+  }
+
+  await recordUsageEvent({
+    adminSupabase,
+    clientReportedPiiTokensRemoved,
+    context,
+    governanceMetadata,
+    outputGuardPassed: true,
+    outputGuardWarnings: outputGuardResult.warnings,
+    templateType,
+    totalPiiTokensRemoved,
+    userId: user.id,
+  });
+
+  const responseHeaders = new Headers({
+    "Content-Type": "text/plain; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "X-Skolskribenten-Output-Guard": "passed",
+  });
+  const serializedWarnings = serializeOutputGuardWarnings(outputGuardResult.warnings);
+
+  if (serializedWarnings) {
+    responseHeaders.set("X-Skolskribenten-Output-Warnings", serializedWarnings);
+  }
+
+  return withRequestContext(
+    new Response(generatedText, {
+      headers: responseHeaders,
     }),
     context,
   );

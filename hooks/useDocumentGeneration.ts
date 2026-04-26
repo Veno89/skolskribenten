@@ -9,7 +9,14 @@ export function useDocumentGeneration() {
   const scrubberRef = useRef<GdprScrubber>();
   const [scrubberStats, setScrubberStats] = useState<ScrubberStats | null>(null);
   const [unmatchedWarnings, setUnmatchedWarnings] = useState<string[]>([]);
-  const { complete, completion, error, isLoading, reset } = useCompletion({
+  const {
+    complete,
+    completion,
+    error,
+    isLoading,
+    reset,
+    warnings: outputWarnings,
+  } = useCompletion({
     api: "/api/ai",
   });
 
@@ -61,6 +68,7 @@ export function useDocumentGeneration() {
     error,
     generateDocument,
     isLoading,
+    outputWarnings,
     resetGenerationState,
     scrubberStats,
     unmatchedWarnings,
