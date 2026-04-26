@@ -198,7 +198,7 @@ describe("/api/ai", () => {
     expect(response.status).toBe(403);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toEqual({
-      error: "Månadens gratisgräns nådd",
+      error: "Månadens gräns är nådd",
       code: "QUOTA_EXCEEDED",
     });
   });
@@ -223,6 +223,13 @@ describe("/api/ai", () => {
     expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.text()).resolves.toBe("Första delen. Andra delen.");
     expect(mockAnthropicStream).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "begin_generation_attempt",
+      expect.objectContaining({
+        p_free_limit: 10,
+        p_paid_limit: 100,
+      }),
+    );
     expect(mockUsageInsert).toHaveBeenCalledTimes(1);
     expect(mockUsageInsert).toHaveBeenCalledWith(
       expect.objectContaining({

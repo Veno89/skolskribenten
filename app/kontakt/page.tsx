@@ -20,7 +20,7 @@ export default function KontaktPage(): JSX.Element {
             </p>
             <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--ss-neutral-800)]">
               <p>Vilken mall du använde, till exempel Incidentrapport eller Unikum.</p>
-              <p>Om något blev fel i texten, vad du skrev in och vad du hade hoppats få ut.</p>
+              <p>Om något blev fel i texten, beskriv felet och vad du hade hoppats få ut utan att klistra in elevnamn eller fulla råanteckningar.</p>
               <p>Om det gäller betalning eller konto, vilket konto eller vilken e-post som används.</p>
               <p>Om något är brådskande kan du också skriva direkt till kontakt@skolskribenten.com.</p>
             </div>

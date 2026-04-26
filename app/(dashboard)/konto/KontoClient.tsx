@@ -1,90 +1,39 @@
-"use client";
-
-import { startTransition, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  FREE_TRANSFORM_LIMIT,
-  formatEntitlementEndDate,
-  getCurrentPlanLabel,
-  hasExceededFreeTransformLimit,
-  isActivePro,
-  isRecurringPro,
-} from "@/lib/billing/entitlements";
-import type { Profile } from "@/types";
+import { KontoBillingActions } from "@/app/(dashboard)/konto/KontoBillingActions";
 
 interface Props {
-  profile: Profile;
+  billingState: {
+    currentPlanLabel: string;
+    debug: {
+      entitlementReason: string;
+      lastReconciledAt: string | null;
+      lastStripeEventId: string | null;
+      localAccessLevel: string;
+      localSource: string;
+      stripeCheckoutSessionId: string | null;
+      stripeCustomerId: string | null;
+      stripeSubscriptionId: string | null;
+    };
+    isPro: boolean;
+    isRecurringPlan: boolean;
+    oneTimePassEndsAt: string | null;
+    quotaExceeded: boolean;
+    quotaExceededMessage: string;
+    usageSummary: string;
+  };
   paymentStatus: "success" | "cancelled" | null;
 }
 
-export function KontoClient({ profile, paymentStatus }: Props): JSX.Element {
-  const [activeCheckout, setActiveCheckout] = useState<"monthly" | "onetime" | null>(null);
-  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const isPro = isActivePro(profile);
-  const isRecurringPlan = isRecurringPro(profile);
-  const quotaExceeded = hasExceededFreeTransformLimit(profile);
-  const currentPlanLabel = getCurrentPlanLabel(profile);
-  const isBusy = activeCheckout !== null || isOpeningPortal;
-  const monthlyActionDisabled = isRecurringPlan ? isBusy : isBusy || isPro;
-  const oneTimePassEndsAt = formatEntitlementEndDate(profile.subscription_end_date);
-
-  const handleCheckout = (priceType: "monthly" | "onetime") => {
-    setErrorMessage(null);
-    setActiveCheckout(priceType);
-
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/stripe/checkout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ priceType }),
-        });
-
-        const payload = (await response.json()) as { error?: string; url?: string };
-
-        if (!response.ok || !payload.url) {
-          setErrorMessage(payload.error ?? "Kunde inte starta betalningen.");
-          setActiveCheckout(null);
-          return;
-        }
-
-        window.location.assign(payload.url);
-      } catch {
-        setErrorMessage("Kunde inte starta betalningen.");
-        setActiveCheckout(null);
-      }
-    });
-  };
-
-  const handleOpenPortal = () => {
-    setErrorMessage(null);
-    setIsOpeningPortal(true);
-
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/stripe/portal", {
-          method: "POST",
-        });
-
-        const payload = (await response.json()) as { error?: string; url?: string };
-
-        if (!response.ok || !payload.url) {
-          setErrorMessage(payload.error ?? "Kunde inte öppna kundportalen.");
-          setIsOpeningPortal(false);
-          return;
-        }
-
-        window.location.assign(payload.url);
-      } catch {
-        setErrorMessage("Kunde inte öppna kundportalen.");
-        setIsOpeningPortal(false);
-      }
-    });
-  };
+export function KontoClient({ billingState, paymentStatus }: Props): JSX.Element {
+  const {
+    currentPlanLabel,
+    debug,
+    isPro,
+    isRecurringPlan,
+    oneTimePassEndsAt,
+    quotaExceeded,
+    quotaExceededMessage,
+    usageSummary,
+  } = billingState;
 
   return (
     <div className="space-y-8">
@@ -103,115 +52,88 @@ export function KontoClient({ profile, paymentStatus }: Props): JSX.Element {
           </div>
           <div className="rounded-[1.5rem] bg-[var(--ss-primary-light)] p-5">
             <p className="text-sm font-medium text-[var(--ss-primary-dark)]">
-              Användning denna månad
+              AnvÃ¤ndning denna mÃ¥nad
             </p>
             <p className="mt-2 text-xl font-semibold text-[var(--ss-neutral-900)]">
-              {profile.transforms_used_this_month} av {FREE_TRANSFORM_LIMIT} gratis omvandlingar använda
+              {usageSummary}
             </p>
           </div>
         </div>
 
         {paymentStatus === "success" ? (
           <div className="mt-6 rounded-[1.25rem] border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-            Betalningen registrerades. Ditt konto uppdateras så snart Stripe-webhooken har
-            bekräftat köpet.
+            Betalningen registrerades. Ditt konto uppdateras sÃ¥ snart Stripe-webhooken har
+            bekrÃ¤ftat kÃ¶pet.
           </div>
         ) : null}
 
         {paymentStatus === "cancelled" ? (
           <div className="mt-6 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Betalningen avbröts. Du kan prova igen när du vill.
-          </div>
-        ) : null}
-
-        {isRecurringPlan ? (
-          <div className="mt-6 rounded-[1.25rem] border border-[var(--ss-primary)]/20 bg-[var(--ss-primary-light)] px-4 py-4 text-sm text-[var(--ss-neutral-900)]">
-            <p className="font-medium">Ditt månadsabonnemang är redan aktivt.</p>
-            <p className="mt-2 leading-7">
-              Öppna kundportalen för att hantera eller avsluta abonnemanget.
-            </p>
-            <Button
-              type="button"
-              onClick={handleOpenPortal}
-              disabled={isOpeningPortal || activeCheckout !== null}
-              className="mt-4 rounded-full"
-            >
-              {isOpeningPortal ? "Öppnar kundportalen..." : "Hantera abonnemang"}
-            </Button>
+            Betalningen avbrÃ¶ts. Du kan prova igen nÃ¤r du vill.
           </div>
         ) : null}
 
         {isPro && !isRecurringPlan && oneTimePassEndsAt ? (
           <div className="mt-6 rounded-[1.25rem] border border-[var(--ss-secondary)] bg-[var(--ss-secondary-light)] px-4 py-3 text-sm text-[var(--ss-neutral-900)]">
-            Ditt 30-dagarskort är aktivt till {oneTimePassEndsAt}. När perioden löpt ut kan du välja
-            ett nytt kort eller månadsabonnemang.
+            Ditt 30-dagarskort Ã¤r aktivt till {oneTimePassEndsAt}. NÃ¤r perioden lÃ¶pt ut kan du vÃ¤lja
+            ett nytt kort eller mÃ¥nadsabonnemang.
           </div>
         ) : null}
 
         {quotaExceeded ? (
           <div className="mt-6 rounded-[1.25rem] border border-[var(--ss-accent)] bg-[var(--ss-accent-soft)] px-4 py-3 text-sm text-[var(--ss-neutral-900)]">
-            Du har använt dina {FREE_TRANSFORM_LIMIT} gratis omvandlingar den här månaden. Uppgradera
-            för att fortsätta.
-          </div>
-        ) : null}
-
-        {errorMessage ? (
-          <div className="mt-6 rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {errorMessage}
+            {quotaExceededMessage}
           </div>
         ) : null}
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-2">
-        <article className="ss-card p-8">
-          <p className="text-sm uppercase tracking-[0.24em] text-[var(--ss-primary)]">
-            Månadsabonnemang
-          </p>
-          <h2 className="mt-4 text-2xl font-semibold text-[var(--ss-neutral-900)]">
-            Pro - Obegränsade omvandlingar, 49 kr/mån
-          </h2>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            Ingen bindningstid. Avsluta när som helst i kundportalen.
-          </p>
-          <Button
-            type="button"
-            onClick={isRecurringPlan ? handleOpenPortal : () => handleCheckout("monthly")}
-            disabled={monthlyActionDisabled}
-            className="mt-8 w-full rounded-full"
-          >
-            {isRecurringPlan
-              ? isOpeningPortal
-                ? "Öppnar kundportalen..."
-                : "Hantera abonnemang"
-              : activeCheckout === "monthly"
-                ? "Startar betalning..."
-                : isPro
-                  ? "Pro redan aktivt"
-                  : "Välj månadsabonnemang"}
-          </Button>
-        </article>
-
-        <article className="ss-card p-8">
-          <p className="text-sm uppercase tracking-[0.24em] text-[var(--ss-primary)]">Engångsköp</p>
-          <h2 className="mt-4 text-2xl font-semibold text-[var(--ss-neutral-900)]">
-            30-dagarskort - Obegränsade omvandlingar i 30 dagar, 49 kr
-          </h2>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground">Förnyas inte automatiskt.</p>
-          <Button
-            type="button"
-            onClick={() => handleCheckout("onetime")}
-            disabled={isBusy || isPro}
-            variant="secondary"
-            className="mt-8 w-full rounded-full"
-          >
-            {activeCheckout === "onetime"
-              ? "Startar betalning..."
-              : isPro
-                ? "Pro redan aktivt"
-                : "Välj 30-dagarskort"}
-          </Button>
-        </article>
+      <section className="ss-card p-6">
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-[var(--ss-neutral-900)]">
+            Teknisk betalningsstatus
+          </summary>
+          <dl className="mt-4 grid gap-3 text-sm text-muted-foreground md:grid-cols-2">
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">
+                {"Lokal \u00e5tkomst"}
+              </dt>
+              <dd>{debug.localAccessLevel}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">{"K\u00e4lla"}</dt>
+              <dd>{debug.localSource}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">Orsak</dt>
+              <dd>{debug.entitlementReason}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">
+                {"Senast avst\u00e4md"}
+              </dt>
+              <dd>{debug.lastReconciledAt ?? "Inte avst\u00e4md"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">Stripe-kund</dt>
+              <dd>{debug.stripeCustomerId ?? "Saknas"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">Stripe-abonnemang</dt>
+              <dd>{debug.stripeSubscriptionId ?? "Saknas"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">Checkout-session</dt>
+              <dd>{debug.stripeCheckoutSessionId ?? "Saknas"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-[var(--ss-neutral-900)]">Senaste Stripe-event</dt>
+              <dd>{debug.lastStripeEventId ?? "Saknas"}</dd>
+            </div>
+          </dl>
+        </details>
       </section>
+
+      <KontoBillingActions isPro={isPro} isRecurringPlan={isRecurringPlan} />
     </div>
   );
 }

@@ -2,6 +2,12 @@ import Link from "next/link";
 import { MobileNav } from "@/components/shared/MobileNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  MONTHLY_PRO_PRICE_SEK,
+  ONE_TIME_PASS_DURATION_DAYS,
+  ONE_TIME_PASS_PRICE_SEK,
+  PAID_TRANSFORM_LIMIT,
+} from "@/lib/billing/entitlements";
 import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
 
 const steps = [
@@ -40,8 +46,8 @@ const templates = [
 
 const transparencyPoints = [
   "Dina anteckningar scrubbas i webbläsaren innan de lämnar enheten.",
-  "Vi sparar aldrig inmatad text eller AI-genererad text i databasen.",
-  "Det enda som loggas är metadata som malltyp, tidpunkt och hur många uppgifter som skyddades.",
+  "Skrivstationen sparar inte råa anteckningar eller AI-genererad text i databasen.",
+  "Generering loggar bara metadata. Planeringssynk och support har separata, tydliga lagringsregler.",
 ] as const;
 
 export default function LandingPage(): JSX.Element {
@@ -263,7 +269,9 @@ export default function LandingPage(): JSX.Element {
             <div className="grid gap-px bg-[var(--ss-neutral-100)] md:grid-cols-2">
               <article className="bg-white px-8 py-10">
                 <p className="text-sm uppercase tracking-[0.24em] text-[var(--ss-primary)]">Pro</p>
-                <h3 className="mt-4 text-2xl font-semibold">Pro — Obegränsade omvandlingar, 49 kr/mån</h3>
+                <h3 className="mt-4 text-2xl font-semibold">
+                  Pro — {PAID_TRANSFORM_LIMIT} omvandlingar per månad, {MONTHLY_PRO_PRICE_SEK} kr/mån
+                </h3>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground">
                   Ingen bindningstid. Avsluta när som helst.
                 </p>
@@ -274,7 +282,8 @@ export default function LandingPage(): JSX.Element {
               <article className="bg-[var(--ss-neutral-50)] px-8 py-10">
                 <p className="text-sm uppercase tracking-[0.24em] text-[var(--ss-primary)]">30-dagarskort</p>
                 <h3 className="mt-4 text-2xl font-semibold">
-                  30-dagarskort — Obegränsade omvandlingar i 30 dagar, 49 kr
+                  {ONE_TIME_PASS_DURATION_DAYS}-dagarskort — {PAID_TRANSFORM_LIMIT} omvandlingar per
+                  månad i {ONE_TIME_PASS_DURATION_DAYS} dagar, {ONE_TIME_PASS_PRICE_SEK} kr
                 </h3>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground">Förnyas inte automatiskt.</p>
                 <Button asChild variant="secondary" className="mt-8 rounded-full px-6">

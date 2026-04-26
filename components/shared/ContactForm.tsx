@@ -186,7 +186,8 @@ export function ContactForm(): JSX.Element {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm leading-7 text-muted-foreground">
           Formuläret skickas till vår server och läggs i supportinkorgen utan att du behöver en lokal
-          e-postklient. Du kan fortfarande skriva direkt till {RECIPIENT} om du föredrar vanlig e-post.
+          e-postklient. Skriv inte elevnamn, personnummer eller fulla råanteckningar här. Du kan
+          fortfarande skriva direkt till {RECIPIENT} om du föredrar vanlig e-post.
         </p>
         <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
           {isSubmitting ? "Skickar..." : "Skicka meddelande"}

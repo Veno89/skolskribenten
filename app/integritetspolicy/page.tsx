@@ -20,13 +20,15 @@ const sections = [
     paragraphs: [
       "Vi sparar kontouppgifter som e-postadress, namn, eventuell skola eller arbetsplats, abonnemangsstatus, betalningsrelaterade identifierare och valda inställningar för skrivton och skolnivå.",
       "Vi sparar också användningsmetadata som malltyp, tidpunkt för generering, om scrubbern kördes och hur många uppgifter som skyddades. Detta används för kontohantering, gratiskvot, abonnemang och produktdrift.",
+      "Om du använder planeringsytans cloudsync sparas checklistestatus och egna planeringsanteckningar så att de kan återställas mellan enheter. Om du skickar ett supportärende sparas meddelandet du själv skriver i supportinkorgen.",
     ],
   },
   {
     title: "Vad vi inte är tänkta att spara",
     paragraphs: [
-      "Skolskribenten är utformad för att inte lagra lärarens råa anteckningar i databasen.",
+      "Skrivstationen är utformad för att inte lagra lärarens råa dokumentationsanteckningar i databasen.",
       "Skolskribenten är också utformad för att inte lagra det färdiga AI-genererade dokumentet i databasen. Texten visas i stället direkt i webbläsaren så att läraren själv kan granska och använda den.",
+      "Planeringsanteckningar i cloudsync och supportmeddelanden är separata undantag. Skriv därför inte elevnamn, personnummer eller känsliga elevuppgifter i supportformuläret.",
     ],
   },
   {
@@ -46,7 +48,8 @@ const sections = [
   {
     title: "Dina val och kontakt",
     paragraphs: [
-      "Om du vill fråga om hur uppgifter hanteras, upptäcka ett problem eller begära rättelse av kontoanknuten information kan du kontakta oss via kontakt@skolskribenten.com.",
+      "Utkast i skrivstationen sparas tillfälligt lokalt i webbläsaren. Planeringsytan kan också spara lokal data och, för Pro-användare, cloudsync-data. Använd inte delade enheter utan att rensa lokal data när du är klar.",
+      "Om du vill fråga om hur uppgifter hanteras, upptäcka ett problem eller begära rättelse eller radering av kontoanknuten information kan du kontakta oss via kontakt@skolskribenten.com.",
       "Denna policy kan uppdateras när tjänsten utvecklas vidare. När större förändringar görs uppdateras datumet högst upp på sidan.",
     ],
   },
@@ -58,7 +61,7 @@ export default function IntegritetspolicyPage(): JSX.Element {
       eyebrow="Integritet"
       title="Integritetspolicy"
       intro="Den här sidan beskriver på klarspråk vilka uppgifter Skolskribenten behandlar, vad tjänsten är byggd för att undvika att spara och vilket ansvar som fortfarande ligger hos användaren."
-      lastUpdated="19 april 2026"
+      lastUpdated="26 april 2026"
       sections={sections.map((section) => ({
         title: section.title,
         paragraphs: [...section.paragraphs],

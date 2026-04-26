@@ -5,15 +5,17 @@ Skolskribenten is a Next.js web app for Swedish teachers who need to turn raw cl
 Current repo status:
 - advanced MVP / controlled-pilot stage
 - the current production-readiness roadmap lives in `docs/audit.md`
-- `docs/design` is historical build/reference material, not current implementation truth
+- `docs/roadmap` is the short current roadmap
+- `docs/design` is now only a historical archive pointer, not implementation truth
 
 ## Core Promise
 
 Skolskribenten is built around privacy by design:
 - raw notes are scrubbed in the browser before any AI request
-- the app does not store the teacher's raw input text
-- the app does not store the generated output text
+- the drafting flow does not store the teacher's raw input text in the database
+- the app does not store generated AI output text in the database
 - the database stores account data, billing state, planning state, support requests, and usage metadata
+- planning cloud sync and support intake are explicit text-storage exceptions and must be treated under the data lifecycle plan in `docs/audit.md`
 
 ## What The App Does
 
@@ -66,7 +68,7 @@ Skolskribenten is built around a strict GDPR-conscious flow:
 2. The GDPR scrubber replaces names and other identifiers locally.
 3. Only the scrubbed text is sent to `/api/ai`.
 4. The AI response is streamed back to the browser.
-5. The database stores usage metadata and app state only, never the raw pedagogical content.
+5. The database stores usage metadata and app state. Drafting raw notes and generated AI output are not stored, but planning cloud-sync notes and support messages are explicit exceptions that need careful handling.
 
 This is the product's most important architectural rule.
 
@@ -117,6 +119,8 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_MONTHLY_PRO=
 STRIPE_PRICE_ONETIME_30DAY=
+STRIPE_API_VERSION=
+STRIPE_ALLOW_TEST_KEYS_IN_PRODUCTION=false
 
 # Operations
 APP_ENV=development
@@ -130,6 +134,8 @@ Notes:
 - the app uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` with `NEXT_PUBLIC_SUPABASE_ANON_KEY` as a fallback
 - the server admin client uses `SUPABASE_SECRET_KEY` with `SUPABASE_SERVICE_ROLE_KEY` as a fallback
 - `OPS_ALERT_WEBHOOK_URL` is optional and forwards sanitized route failures plus request IDs to your incident channel
+- Stripe price IDs are server allowlist config; browsers never choose raw Stripe prices
+- omit `STRIPE_API_VERSION` unless deliberately pinning an API version supported by the installed Stripe SDK
 
 ## Local Development
 
@@ -144,12 +150,19 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
+Billing reconciliation:
+
+```bash
+pnpm billing:reconcile
+pnpm billing:reconcile:repair
+```
+
 ## Database Notes
 
 Supabase migrations live in `supabase/migrations/`.
 
 The current local migration set runs through:
-- `011_add_planning_template_type.sql`
+- `014_authoritative_entitlement_hardening.sql`
 
 The live app expects at least:
 - `profiles`
@@ -159,6 +172,7 @@ The live app expects at least:
 - RLS policies
 - the generation-attempt quota functions
 - the monthly reset / entitlement maintenance SQL jobs
+- the Stripe billing projection tables and RPCs documented in `docs/billing-security.md`
 
 ## Current Product Scope
 

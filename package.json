@@ -9,7 +9,9 @@
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "billing:reconcile": "node scripts/reconcile-stripe.mjs",
+    "billing:reconcile:repair": "node scripts/reconcile-stripe.mjs --repair"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

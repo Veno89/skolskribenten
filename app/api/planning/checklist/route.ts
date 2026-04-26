@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { isActivePro } from "@/lib/billing/entitlements";
+import { getAuthoritativeEntitlementDecision } from "@/lib/billing/entitlements";
 import { mergeProgressMaps, mergeTeacherNotes } from "@/lib/planning/cloud-merge";
 import { createClient } from "@/lib/supabase/server";
 import type { ChecklistProgressMap } from "@/lib/planning/gap-analysis";
@@ -52,7 +52,22 @@ async function getAuthenticatedProfile(): Promise<AuthContext> {
     return { error: NextResponse.json({ error: "Profil saknas" }, { status: 404 }) };
   }
 
-  if (!isActivePro(profile)) {
+  const { data: entitlement, error: entitlementError } = await supabase
+    .from("account_entitlements")
+    .select("access_level, source, reason, paid_access_until")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (entitlementError) {
+    return {
+      error: NextResponse.json(
+        { error: "Kunde inte kontrollera Pro-status" },
+        { status: 500 },
+      ),
+    };
+  }
+
+  if (!getAuthoritativeEntitlementDecision(entitlement).active) {
     return {
       error: NextResponse.json(
         { error: "Cloudsync kräver Pro", code: "PRO_REQUIRED" },

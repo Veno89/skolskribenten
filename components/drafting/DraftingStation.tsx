@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useDocumentGeneration } from "@/hooks/useDocumentGeneration";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import {
-  FREE_TRANSFORM_LIMIT,
-  hasExceededFreeTransformLimit,
-  isActivePro,
+  getQuotaExceededMessage,
+  hasExceededTransformLimit,
 } from "@/lib/billing/entitlements";
 import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
 import {
@@ -52,8 +51,8 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
     userSettings.preferredTone ? TONE_LABELS[userSettings.preferredTone] : null,
   ].filter((value): value is string => Boolean(value));
   const selectedTemplateInfo = TEMPLATE_DETAILS[selectedTemplate];
-  const isPro = isActivePro(userProfile);
-  const quotaExceeded = hasExceededFreeTransformLimit(userProfile);
+  const quotaExceeded = hasExceededTransformLimit(userProfile);
+  const quotaExceededMessage = getQuotaExceededMessage(userProfile);
 
   const handleTemplateChange = (nextTemplate: typeof selectedTemplate) => {
     if (switchTemplate(nextTemplate)) {
@@ -146,14 +145,13 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
 
           {quotaExceeded ? (
             <div className="border-t border-[var(--ss-accent)] bg-[var(--ss-accent-soft)] px-4 py-3 text-sm leading-7 text-[var(--ss-neutral-900)]">
-              Du har använt dina {FREE_TRANSFORM_LIMIT} gratis omvandlingar den här månaden.{" "}
+              {quotaExceededMessage}{" "}
               <Link
                 href="/konto"
                 className="font-medium text-[var(--ss-primary)] underline hover:no-underline"
               >
-                Uppgradera till Pro
+                Gå till konto
               </Link>{" "}
-              för att fortsätta.
             </div>
           ) : null}
 
@@ -167,7 +165,7 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
               {isLoading
                 ? "Genererar..."
                 : quotaExceeded
-                  ? "Gratisgräns nådd"
+                  ? "Månadsgräns nådd"
                   : "Generera dokument →"}
             </button>
           </div>

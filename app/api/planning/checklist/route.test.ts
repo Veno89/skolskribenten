@@ -77,6 +77,20 @@ describe("/api/planning/checklist", () => {
         };
       }
 
+      if (table === "account_entitlements") {
+        return {
+          select: vi.fn(() =>
+            createSelectChain({
+              data: {
+                access_level: "pro",
+                paid_access_until: null,
+                reason: "stripe_subscription_active",
+                source: "recurring_subscription",
+              },
+            })),
+        };
+      }
+
       if (table === "planning_checklists") {
         return {
           select: vi.fn(() =>
@@ -130,6 +144,20 @@ describe("/api/planning/checklist", () => {
         };
       }
 
+      if (table === "account_entitlements") {
+        return {
+          select: vi.fn(() =>
+            createSelectChain({
+              data: {
+                access_level: "free",
+                paid_access_until: null,
+                reason: "no_paid_entitlement",
+                source: "none",
+              },
+            })),
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     });
 
@@ -166,6 +194,20 @@ describe("/api/planning/checklist", () => {
                 id: "user-123",
                 subscription_status: "pro",
                 subscription_end_date: null,
+              },
+            })),
+        };
+      }
+
+      if (table === "account_entitlements") {
+        return {
+          select: vi.fn(() =>
+            createSelectChain({
+              data: {
+                access_level: "pro",
+                paid_access_until: null,
+                reason: "stripe_subscription_active",
+                source: "recurring_subscription",
               },
             })),
         };
@@ -242,6 +284,20 @@ describe("/api/planning/checklist", () => {
                 id: "user-123",
                 subscription_status: "pro",
                 subscription_end_date: null,
+              },
+            })),
+        };
+      }
+
+      if (table === "account_entitlements") {
+        return {
+          select: vi.fn(() =>
+            createSelectChain({
+              data: {
+                access_level: "pro",
+                paid_access_until: null,
+                reason: "stripe_subscription_active",
+                source: "recurring_subscription",
               },
             })),
         };

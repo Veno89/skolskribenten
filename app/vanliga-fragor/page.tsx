@@ -4,7 +4,7 @@ const faqItems = [
   {
     question: "Sparas mina anteckningar i databasen?",
     answer:
-      "Nej. Skolskribenten är byggt så att råtexten scrubbas i webbläsaren innan något skickas vidare. Det som sparas är kontouppgifter, abonnemangsstatus och användningsmetadata, inte själva anteckningarna eller den färdiga AI-texten.",
+      "Skrivstationens råa anteckningar och färdiga AI-text sparas inte i databasen. Det som sparas är kontouppgifter, abonnemangsstatus och användningsmetadata. Planeringsytans cloudsync och supportformuläret är separata undantag där text du själv skriver kan sparas.",
   },
   {
     question: "Kan jag skriva riktiga elevnamn i rutan?",
@@ -19,7 +19,12 @@ const faqItems = [
   {
     question: "Kan jag förlora det jag skrivit om jag blir avbruten?",
     answer:
-      "Nej, inte lika lätt längre. Skrivstationen sparar nu dina utkast lokalt i webbläsaren på den här enheten så att du kan komma tillbaka även om du tappar uppkopplingen eller behöver lämna sidan.",
+      "Nej, inte lika lätt längre. Skrivstationen sparar dina utkast tillfälligt lokalt i webbläsaren på den här enheten så att du kan komma tillbaka även om du tappar uppkopplingen eller behöver lämna sidan. På delade enheter ska du logga ut och rensa lokal data när du är klar.",
+  },
+  {
+    question: "Kan jag skriva elevuppgifter i supportformuläret?",
+    answer:
+      "Nej. Beskriv problemet utan elevnamn, personnummer, hälsouppgifter eller fulla råanteckningar. Om ett exempel behövs, anonymisera det först på samma sätt som du skulle göra innan du delar det utanför skolans egna system.",
   },
   {
     question: "Är texten färdig att använda direkt?",

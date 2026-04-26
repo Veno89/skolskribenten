@@ -20,6 +20,7 @@ const sections = [
     paragraphs: [
       "Du ansvarar för att alltid granska både inmatning och färdigt resultat innan text används i officiella sammanhang, delas med vårdnadshavare eller förs in i skolans system.",
       "Du ansvarar också för att använda funktionen för extra namn när det behövs. Den inbyggda scrubbern är best-effort och täcker inte automatiskt alla namn som kan förekomma i svenska klassrum.",
+      "Du ansvarar för att inte skicka elevnamn, personnummer, hälsouppgifter eller andra känsliga elevuppgifter via supportformuläret eller i planeringsanteckningar om din skola inte har godkänt det arbetssättet.",
     ],
   },
   {
@@ -40,6 +41,7 @@ const sections = [
     title: "Konton, abonnemang och tillgänglighet",
     paragraphs: [
       "Vissa funktioner kräver konto. Betalda funktioner och abonnemang hanteras via de betalningsvillkor och flöden som visas i tjänsten vid köptillfället.",
+      "Vissa funktioner sparar lokal data i webbläsaren för att kunna återställa ditt arbete. Om du använder en delad enhet behöver du logga ut och rensa lokal data när du är klar.",
       "Vi strävar efter att tjänsten ska fungera stabilt, men kan inte lova oavbruten tillgänglighet. Funktioner kan förändras, pausas eller förbättras under produktens utveckling.",
     ],
   },
@@ -58,7 +60,7 @@ export default function AnvandarvillkorPage(): JSX.Element {
       eyebrow="Villkor"
       title="Användarvillkor"
       intro="De här villkoren beskriver hur Skolskribenten är tänkt att användas och vilket ansvar som ligger kvar hos användaren när AI används som skrivstöd i skolan."
-      lastUpdated="19 april 2026"
+      lastUpdated="26 april 2026"
       sections={sections.map((section) => ({
         title: section.title,
         paragraphs: [...section.paragraphs],

@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   FREE_TRANSFORM_LIMIT,
+  PAID_TRANSFORM_LIMIT,
   formatEntitlementEndDate,
+  getAuthoritativeEntitlementDecision,
   getCurrentPlanLabel,
+  getEntitlementDecision,
+  getMonthlyTransformLimit,
+  getQuotaExceededMessage,
+  getStripeSubscriptionEntitlementDecision,
   getUsageSummary,
-  hasExceededFreeTransformLimit,
+  hasExceededTransformLimit,
   isActivePro,
   isRecurringPro,
 } from "../entitlements";
@@ -45,9 +51,87 @@ describe("billing entitlements", () => {
     ).toBe(false);
   });
 
+  it("centralizes entitlement decisions with explicit reasons", () => {
+    expect(
+      getEntitlementDecision(
+        {
+          subscription_status: "cancelled",
+          subscription_end_date: null,
+        },
+        NOW,
+      ),
+    ).toEqual({
+      accessLevel: "free",
+      active: false,
+      paidAccessUntil: null,
+      reason: "local_subscription_cancelled",
+      recurring: false,
+      source: "none",
+    });
+  });
+
+  it("fails closed when no authoritative entitlement row exists", () => {
+    expect(getAuthoritativeEntitlementDecision(null, NOW)).toEqual({
+      accessLevel: "free",
+      active: false,
+      paidAccessUntil: null,
+      reason: "no_authoritative_entitlement",
+      recurring: false,
+      source: "none",
+    });
+  });
+
+  it("uses account_entitlements as the paid access source of truth", () => {
+    expect(
+      getAuthoritativeEntitlementDecision(
+        {
+          access_level: "pro",
+          paid_access_until: null,
+          reason: "stripe_subscription_active",
+          source: "recurring_subscription",
+        },
+        NOW,
+      ),
+    ).toMatchObject({
+      active: true,
+      recurring: true,
+      reason: "stripe_subscription_active",
+      source: "recurring_subscription",
+    });
+
+    expect(
+      getAuthoritativeEntitlementDecision(
+        {
+          access_level: "pro",
+          paid_access_until: "2026-04-18T12:00:00.000Z",
+          reason: "one_time_checkout_paid",
+          source: "one_time_pass",
+        },
+        NOW,
+      ),
+    ).toMatchObject({
+      active: false,
+      reason: "one_time_pass_expired",
+      source: "one_time_pass",
+    });
+  });
+
+  it.each([
+    ["trialing", true, "stripe_subscription_trialing"],
+    ["active", true, "stripe_subscription_active"],
+    ["past_due", false, "stripe_subscription_past_due_strict_no_grace"],
+    ["unpaid", false, "stripe_subscription_unpaid"],
+    ["canceled", false, "stripe_subscription_canceled"],
+    ["paused", false, "stripe_subscription_paused"],
+    ["incomplete", false, "stripe_subscription_incomplete"],
+    ["incomplete_expired", false, "stripe_subscription_incomplete_expired"],
+  ] as const)("maps Stripe %s subscriptions to exact entitlement behavior", (status, active, reason) => {
+    expect(getStripeSubscriptionEntitlementDecision(status)).toEqual({ active, reason });
+  });
+
   it("detects when the free limit has been reached", () => {
     expect(
-      hasExceededFreeTransformLimit(
+      hasExceededTransformLimit(
         {
           subscription_status: "free",
           subscription_end_date: null,
@@ -56,6 +140,20 @@ describe("billing entitlements", () => {
         NOW,
       ),
     ).toBe(true);
+  });
+
+  it("detects when the paid monthly limit has been reached", () => {
+    const profile = {
+      subscription_status: "pro" as const,
+      subscription_end_date: null,
+      transforms_used_this_month: PAID_TRANSFORM_LIMIT,
+    };
+
+    expect(getMonthlyTransformLimit(profile, NOW)).toBe(PAID_TRANSFORM_LIMIT);
+    expect(hasExceededTransformLimit(profile, NOW)).toBe(true);
+    expect(getQuotaExceededMessage(profile, NOW)).toBe(
+      "Du har använt månadens 100 Pro-omvandlingar. Kvoten fylls på nästa månad.",
+    );
   });
 
   it("formats plan labels from one place", () => {
@@ -79,7 +177,7 @@ describe("billing entitlements", () => {
         },
         NOW,
       ),
-    ).toBe("Pro - Obegränsade omvandlingar, 49 kr/mån");
+    ).toBe("Pro - 100 omvandlingar per månad, 49 kr/mån");
   });
 
   it("builds usage summaries for free and paid access", () => {
@@ -99,11 +197,11 @@ describe("billing entitlements", () => {
         {
           subscription_status: "pro",
           subscription_end_date: "2026-05-01T00:00:00.000Z",
-          transforms_used_this_month: 0,
+          transforms_used_this_month: 12,
         },
         NOW,
       ),
-    ).toBe("30-dagarskort aktivt till 2026-05-01");
+    ).toBe("12 av 100 Pro-omvandlingar använda den här månaden");
   });
 
   it("returns null for invalid entitlement dates", () => {

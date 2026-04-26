@@ -7,7 +7,7 @@ const principles = [
   },
   {
     title: "Integritet är inte en eftertanke",
-    text: "Det viktigaste produktbeslutet är att anteckningarna scrubbas i webbläsaren innan något skickas vidare. Det betyder att elevnära råtext inte ska behöva lämna lärarens enhet för att man ska få hjälp med formuleringen.",
+    text: "Det viktigaste produktbeslutet i skrivstationen är att anteckningarna scrubbas i webbläsaren innan något skickas vidare. Det betyder att elevnära råtext inte ska behöva lämna lärarens enhet för att man ska få hjälp med formuleringen.",
   },
   {
     title: "AI ska hjälpa, inte ta över",

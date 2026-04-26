@@ -3,7 +3,12 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { CLAUDE_PRIMARY_MODEL, TEMPLATE_TYPES } from "@/lib/ai/provider";
 import { getSystemPrompt } from "@/lib/ai/prompts";
-import { FREE_TRANSFORM_LIMIT } from "@/lib/billing/entitlements";
+import {
+  FREE_TRANSFORM_LIMIT,
+  PAID_TRANSFORM_LIMIT,
+  getAuthoritativeEntitlementDecision,
+  getMonthlyTransformLimit,
+} from "@/lib/billing/entitlements";
 import { GdprScrubber } from "@/lib/gdpr/scrubber";
 import {
   detectPotentialSensitiveContent,
@@ -46,6 +51,12 @@ type ProfileSnapshot = Pick<
   | "transforms_used_this_month"
   | "user_settings"
 >;
+type AccountEntitlementSnapshot = {
+  access_level: "free" | "pro";
+  paid_access_until: string | null;
+  reason: string;
+  source: "admin" | "none" | "one_time_pass" | "recurring_subscription";
+};
 
 function buildAttemptFailureResponse(context: RouteContext, reason: string): Response {
   switch (reason) {
@@ -53,7 +64,7 @@ function buildAttemptFailureResponse(context: RouteContext, reason: string): Res
       return jsonWithContext({ error: "Profil hittades inte" }, { status: 404 }, context);
     case "quota_exceeded":
       return jsonWithContext(
-        { error: "Månadens gratisgräns nådd", code: "QUOTA_EXCEEDED" },
+        { error: "Månadens gräns är nådd", code: "QUOTA_EXCEEDED" },
         { status: 403 },
         context,
       );
@@ -88,16 +99,6 @@ function buildAttemptResult(
   };
 }
 
-function isActivePro(profile: Pick<ProfileSnapshot, "subscription_status" | "subscription_end_date">): boolean {
-  const now = Date.now();
-
-  return (
-    profile.subscription_status === "pro" &&
-    (profile.subscription_end_date === null ||
-      new Date(profile.subscription_end_date).getTime() > now)
-  );
-}
-
 function hasWindowExpired(windowStart: string, windowSeconds: number): boolean {
   const windowStartTimestamp = new Date(windowStart).getTime();
 
@@ -129,6 +130,19 @@ async function beginGenerationAttemptFallback(
   if (!profile) {
     return buildAttemptResult(null, {
       reason: "profile_not_found",
+    });
+  }
+
+  const { data: entitlement, error: entitlementError } = await adminSupabase
+    .from("account_entitlements")
+    .select("access_level, source, reason, paid_access_until")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (entitlementError) {
+    logRouteError(context, "Fallback authoritative entitlement lookup failed.", entitlementError);
+    return buildAttemptResult(profile, {
+      reason: "entitlement_check_failed",
     });
   }
 
@@ -171,38 +185,41 @@ async function beginGenerationAttemptFallback(
     return null;
   }
 
-  if (!isActivePro(profile)) {
-    if (profile.transforms_used_this_month >= Math.max(FREE_TRANSFORM_LIMIT, 0)) {
-      return buildAttemptResult(profile, {
-        reason: "quota_exceeded",
-      });
-    }
+  const authoritativeDecision = getAuthoritativeEntitlementDecision(
+    entitlement as AccountEntitlementSnapshot | null,
+  );
+  const entitlementProfile = {
+    ...profile,
+    subscription_end_date:
+      authoritativeDecision.source === "one_time_pass" ? authoritativeDecision.paidAccessUntil : null,
+    subscription_status: authoritativeDecision.active ? "pro" as const : "free" as const,
+  };
+  const monthlyTransformLimit = Math.max(getMonthlyTransformLimit(entitlementProfile), 0);
 
-    const nextTransformCount = profile.transforms_used_this_month + 1;
-    const { error: transformError } = await adminSupabase
-      .from("profiles")
-      .update({
-        transforms_used_this_month: nextTransformCount,
-      })
-      .eq("id", userId);
-
-    if (transformError) {
-      logRouteError(context, "Fallback transform reservation failed.", transformError);
-      return null;
-    }
-
+  if (profile.transforms_used_this_month >= monthlyTransformLimit) {
     return buildAttemptResult(profile, {
-      allowed: true,
-      reason: "allowed",
-      reserved_transform: true,
-      transforms_used_this_month: nextTransformCount,
+      reason: "quota_exceeded",
     });
+  }
+
+  const nextTransformCount = profile.transforms_used_this_month + 1;
+  const { error: transformError } = await adminSupabase
+    .from("profiles")
+    .update({
+      transforms_used_this_month: nextTransformCount,
+    })
+    .eq("id", userId);
+
+  if (transformError) {
+    logRouteError(context, "Fallback transform reservation failed.", transformError);
+    return null;
   }
 
   return buildAttemptResult(profile, {
     allowed: true,
     reason: "allowed",
-    reserved_transform: false,
+    reserved_transform: true,
+    transforms_used_this_month: nextTransformCount,
   });
 }
 
@@ -215,6 +232,7 @@ async function beginGenerationAttempt(
     .rpc("begin_generation_attempt", {
       p_user_id: userId,
       p_free_limit: FREE_TRANSFORM_LIMIT,
+      p_paid_limit: PAID_TRANSFORM_LIMIT,
       p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
       p_max_calls_per_window: MAX_CALLS_PER_WINDOW,
     })

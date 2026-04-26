@@ -1,2 +1,41 @@
-- Förbättra användargränssnittet för att göra det mer intuitivt.
-- Lägg till förmågan att använda AI för att läsa av handskrivna anteckningar och konvertera dem till digital text som kan användas i rapporter.
+# Roadmap
+
+Last updated: April 26, 2026.
+
+This roadmap tracks current product and security priorities. `docs/audit.md` is still the detailed source of truth; this file is the short operational map.
+
+## Phase A: Privacy And Data Lifecycle
+- Make support intake safe for a privacy-sensitive school product: warnings, sensitive-content checks, retention, deletion, and triage fields.
+- Add a single "clear all local data" path for drafting, planning, sync queue, and onboarding browser storage.
+- Add a Settings privacy section for local autosave, shared-device risk, planning cloud sync, exports, and support-message handling.
+- Tighten user-facing privacy copy so "never stored" applies specifically to drafting raw notes and generated AI output, with explicit planning/support exceptions.
+
+## Phase B: Support And Operations
+- Add a support/admin queue with status, owner, handled timestamp, deletion/redaction timestamp, and request IDs.
+- Stop writing raw support emails to route logs; use request IDs, user IDs, hashes, or aggregate counters.
+- Configure and test `OPS_ALERT_WEBHOOK_URL` in deployed environments.
+- Add runbooks for support PII, AI provider failures, planning sync conflicts, account deletion, and release rollback.
+
+## Phase C: Planning Sync Reliability
+- Replace timestamp-only conflict detection with server-generated revisions and conditional writes.
+- Make `updated_at` server-owned and store client edit timestamps separately.
+- Add conflict history/audit rows and tests for stale queue replay, duplicate flushes, offline/online races, and multi-device edits.
+- Keep product copy honest until this becomes revisioned sync: best-effort backup/sync, not collaboration-grade sync.
+
+## Phase D: AI Quality And Safety
+- Version prompts/models in usage metadata.
+- Add a golden eval and red-team suite for Swedish school documentation, placeholder preservation, and hallucination resistance.
+- Add post-generation suspicious-output checks or warnings before copy/export.
+- Add provider timeout/cancel handling and a live AI smoke test with synthetic scrubbed input.
+
+## Phase E: Account And Security Maturity
+- Add email change, account deletion, data export, and session/security settings.
+- Decide whether registration should hide account-existence signals.
+- Add app-level auth throttling if Supabase platform controls are not sufficient.
+- Harden CSP through report-only rollout, then nonce/hash enforcement where feasible.
+- Complete manual accessibility and live auth-security sign-off.
+
+## Phase F: Product Expansion
+- Expand curriculum coverage and planning depth only after privacy, support, sync, and AI governance work lands.
+- Revisit OCR/handwritten-note import after the privacy and evaluation harness exists.
+- Add new templates based on real support/feedback patterns, not speculative scope.

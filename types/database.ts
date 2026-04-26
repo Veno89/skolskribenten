@@ -70,6 +70,284 @@ export interface Database {
           },
         ];
       };
+      stripe_customer_mappings: {
+        Row: {
+          created_at: string;
+          livemode: boolean;
+          stripe_customer_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          livemode: boolean;
+          stripe_customer_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          livemode?: boolean;
+          stripe_customer_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stripe_customer_mappings_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      stripe_checkout_sessions: {
+        Row: {
+          created_at: string;
+          id: string;
+          latest_event_created_at: string | null;
+          latest_event_id: string | null;
+          livemode: boolean;
+          mode: "payment" | "subscription";
+          payment_status: string | null;
+          price_key: string;
+          status: string | null;
+          stripe_checkout_session_id: string;
+          stripe_customer_id: string;
+          stripe_payment_intent_id: string | null;
+          stripe_price_id: string;
+          stripe_subscription_id: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          latest_event_created_at?: string | null;
+          latest_event_id?: string | null;
+          livemode: boolean;
+          mode: "payment" | "subscription";
+          payment_status?: string | null;
+          price_key: string;
+          status?: string | null;
+          stripe_checkout_session_id: string;
+          stripe_customer_id: string;
+          stripe_payment_intent_id?: string | null;
+          stripe_price_id: string;
+          stripe_subscription_id?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          latest_event_created_at?: string | null;
+          latest_event_id?: string | null;
+          livemode?: boolean;
+          mode?: "payment" | "subscription";
+          payment_status?: string | null;
+          price_key?: string;
+          status?: string | null;
+          stripe_checkout_session_id?: string;
+          stripe_customer_id?: string;
+          stripe_payment_intent_id?: string | null;
+          stripe_price_id?: string;
+          stripe_subscription_id?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stripe_checkout_sessions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      stripe_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean;
+          created_at: string;
+          current_period_end: string | null;
+          id: string;
+          last_reconciled_at: string | null;
+          latest_event_created_at: string | null;
+          latest_event_id: string | null;
+          latest_invoice_id: string | null;
+          stripe_customer_id: string;
+          stripe_price_id: string | null;
+          stripe_status:
+            | "active"
+            | "canceled"
+            | "incomplete"
+            | "incomplete_expired"
+            | "past_due"
+            | "paused"
+            | "trialing"
+            | "unpaid";
+          stripe_subscription_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          cancel_at_period_end?: boolean;
+          created_at?: string;
+          current_period_end?: string | null;
+          id?: string;
+          last_reconciled_at?: string | null;
+          latest_event_created_at?: string | null;
+          latest_event_id?: string | null;
+          latest_invoice_id?: string | null;
+          stripe_customer_id: string;
+          stripe_price_id?: string | null;
+          stripe_status:
+            | "active"
+            | "canceled"
+            | "incomplete"
+            | "incomplete_expired"
+            | "past_due"
+            | "paused"
+            | "trialing"
+            | "unpaid";
+          stripe_subscription_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          cancel_at_period_end?: boolean;
+          created_at?: string;
+          current_period_end?: string | null;
+          id?: string;
+          last_reconciled_at?: string | null;
+          latest_event_created_at?: string | null;
+          latest_event_id?: string | null;
+          latest_invoice_id?: string | null;
+          stripe_customer_id?: string;
+          stripe_price_id?: string | null;
+          stripe_status?:
+            | "active"
+            | "canceled"
+            | "incomplete"
+            | "incomplete_expired"
+            | "past_due"
+            | "paused"
+            | "trialing"
+            | "unpaid";
+          stripe_subscription_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stripe_subscriptions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      account_entitlements: {
+        Row: {
+          access_level: "free" | "pro";
+          created_at: string;
+          last_reconciled_at: string | null;
+          last_stripe_event_id: string | null;
+          last_transition_at: string;
+          paid_access_until: string | null;
+          reason: string;
+          source: "admin" | "none" | "one_time_pass" | "recurring_subscription";
+          stripe_checkout_session_id: string | null;
+          stripe_subscription_id: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          access_level?: "free" | "pro";
+          created_at?: string;
+          last_reconciled_at?: string | null;
+          last_stripe_event_id?: string | null;
+          last_transition_at?: string;
+          paid_access_until?: string | null;
+          reason?: string;
+          source?: "admin" | "none" | "one_time_pass" | "recurring_subscription";
+          stripe_checkout_session_id?: string | null;
+          stripe_subscription_id?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          access_level?: "free" | "pro";
+          created_at?: string;
+          last_reconciled_at?: string | null;
+          last_stripe_event_id?: string | null;
+          last_transition_at?: string;
+          paid_access_until?: string | null;
+          reason?: string;
+          source?: "admin" | "none" | "one_time_pass" | "recurring_subscription";
+          stripe_checkout_session_id?: string | null;
+          stripe_subscription_id?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_entitlements_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      stripe_events: {
+        Row: {
+          created_at: string;
+          error_message: string | null;
+          event_type: string;
+          livemode: boolean;
+          object_id: string | null;
+          payload: Json;
+          processed_at: string | null;
+          processing_attempts: number;
+          status: "failed" | "processed" | "processing" | "received" | "skipped";
+          stripe_created_at: string;
+          stripe_event_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          error_message?: string | null;
+          event_type: string;
+          livemode: boolean;
+          object_id?: string | null;
+          payload?: Json;
+          processed_at?: string | null;
+          processing_attempts?: number;
+          status?: "failed" | "processed" | "processing" | "received" | "skipped";
+          stripe_created_at: string;
+          stripe_event_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          error_message?: string | null;
+          event_type?: string;
+          livemode?: boolean;
+          object_id?: string | null;
+          payload?: Json;
+          processed_at?: string | null;
+          processing_attempts?: number;
+          status?: "failed" | "processed" | "processing" | "received" | "skipped";
+          stripe_created_at?: string;
+          stripe_event_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       planning_checklists: {
         Row: {
           area_id: string;
@@ -214,10 +492,56 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      apply_checkout_session_projection: {
+        Args: {
+          p_access_until: string | null;
+          p_event_created_at: string;
+          p_event_id: string;
+          p_livemode: boolean;
+          p_mode: "payment" | "subscription";
+          p_payment_status: string | null;
+          p_price_key: string;
+          p_status: string | null;
+          p_stripe_checkout_session_id: string;
+          p_stripe_customer_id: string;
+          p_stripe_payment_intent_id: string | null;
+          p_stripe_price_id: string;
+          p_stripe_subscription_id: string | null;
+          p_user_id: string;
+        };
+        Returns: {
+          applied: boolean;
+          entitlement_access_level: string;
+          entitlement_reason: string;
+        }[];
+      };
+      apply_subscription_projection: {
+        Args: {
+          p_cancel_at_period_end: boolean;
+          p_current_period_end: string | null;
+          p_entitlement_active: boolean;
+          p_entitlement_reason: string;
+          p_event_created_at: string;
+          p_event_id: string;
+          p_latest_invoice_id: string | null;
+          p_reconciled_at?: string | null;
+          p_stripe_customer_id: string;
+          p_stripe_price_id: string | null;
+          p_stripe_status: string;
+          p_stripe_subscription_id: string;
+          p_user_id: string;
+        };
+        Returns: {
+          applied: boolean;
+          entitlement_access_level: string;
+          entitlement_reason: string;
+        }[];
+      };
       begin_generation_attempt: {
         Args: {
           p_free_limit?: number;
           p_max_calls_per_window?: number;
+          p_paid_limit?: number;
           p_user_id: string;
           p_window_seconds?: number;
         };
@@ -231,9 +555,58 @@ export interface Database {
           user_settings: Json;
         }[];
       };
+      claim_stripe_event: {
+        Args: {
+          p_event_type: string;
+          p_livemode: boolean;
+          p_object_id: string | null;
+          p_payload: Json;
+          p_stripe_created_at: string;
+          p_stripe_event_id: string;
+        };
+        Returns: {
+          processing_attempts: number;
+          should_process: boolean;
+          status: string;
+        }[];
+      };
+      complete_stripe_event: {
+        Args: {
+          p_error_message?: string | null;
+          p_status: string;
+          p_stripe_event_id: string;
+        };
+        Returns: undefined;
+      };
       expire_one_time_passes: {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
+      };
+      record_checkout_session_created: {
+        Args: {
+          p_livemode: boolean;
+          p_mode: "payment" | "subscription";
+          p_payment_status: string | null;
+          p_price_key: string;
+          p_status: string | null;
+          p_stripe_checkout_session_id: string;
+          p_stripe_customer_id: string;
+          p_stripe_price_id: string;
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
+      record_stripe_customer_mapping: {
+        Args: {
+          p_livemode: boolean;
+          p_stripe_customer_id: string;
+          p_user_id: string;
+        };
+        Returns: {
+          livemode: boolean;
+          stripe_customer_id: string;
+          user_id: string;
+        }[];
       };
       release_generation_attempt: {
         Args: {
@@ -243,6 +616,12 @@ export interface Database {
       };
       reset_monthly_transforms: {
         Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
+      sync_profile_from_entitlement: {
+        Args: {
+          p_user_id: string;
+        };
         Returns: undefined;
       };
     };
