@@ -384,9 +384,11 @@ export interface Database {
       planning_checklists: {
         Row: {
           area_id: string;
+          client_updated_at: string | null;
           created_at: string;
           id: string;
           progress_map: Json;
+          revision: number;
           subject_id: string;
           teacher_notes: string;
           updated_at: string;
@@ -394,9 +396,11 @@ export interface Database {
         };
         Insert: {
           area_id: string;
+          client_updated_at?: string | null;
           created_at?: string;
           id?: string;
           progress_map?: Json;
+          revision?: number;
           subject_id: string;
           teacher_notes?: string;
           updated_at?: string;
@@ -404,9 +408,11 @@ export interface Database {
         };
         Update: {
           area_id?: string;
+          client_updated_at?: string | null;
           created_at?: string;
           id?: string;
           progress_map?: Json;
+          revision?: number;
           subject_id?: string;
           teacher_notes?: string;
           updated_at?: string;
@@ -415,6 +421,74 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "planning_checklists_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      planning_sync_conflicts: {
+        Row: {
+          area_id: string;
+          client_base_revision: number | null;
+          client_progress_map: Json;
+          client_teacher_notes_hash: string;
+          client_teacher_notes_length: number;
+          client_updated_at: string | null;
+          created_at: string;
+          id: string;
+          resolution_strategy: "server" | "merged" | "local" | null;
+          resolved_at: string | null;
+          server_progress_map: Json;
+          server_revision: number;
+          server_teacher_notes_hash: string;
+          server_teacher_notes_length: number;
+          server_updated_at: string | null;
+          subject_id: string;
+          user_id: string;
+        };
+        Insert: {
+          area_id: string;
+          client_base_revision?: number | null;
+          client_progress_map?: Json;
+          client_teacher_notes_hash: string;
+          client_teacher_notes_length?: number;
+          client_updated_at?: string | null;
+          created_at?: string;
+          id?: string;
+          resolution_strategy?: "server" | "merged" | "local" | null;
+          resolved_at?: string | null;
+          server_progress_map?: Json;
+          server_revision: number;
+          server_teacher_notes_hash: string;
+          server_teacher_notes_length?: number;
+          server_updated_at?: string | null;
+          subject_id: string;
+          user_id: string;
+        };
+        Update: {
+          area_id?: string;
+          client_base_revision?: number | null;
+          client_progress_map?: Json;
+          client_teacher_notes_hash?: string;
+          client_teacher_notes_length?: number;
+          client_updated_at?: string | null;
+          created_at?: string;
+          id?: string;
+          resolution_strategy?: "server" | "merged" | "local" | null;
+          resolved_at?: string | null;
+          server_progress_map?: Json;
+          server_revision?: number;
+          server_teacher_notes_hash?: string;
+          server_teacher_notes_length?: number;
+          server_updated_at?: string | null;
+          subject_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "planning_sync_conflicts_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -667,6 +741,27 @@ export interface Database {
           p_user_id: string;
         };
         Returns: undefined;
+      };
+      save_planning_checklist_revisioned: {
+        Args: {
+          p_area_id: string;
+          p_base_revision?: number | null;
+          p_client_updated_at: string;
+          p_progress_map: Json;
+          p_resolution_strategy?: "server" | "merged" | "local" | null;
+          p_resolved_conflict_id?: string | null;
+          p_subject_id: string;
+          p_teacher_notes: string;
+        };
+        Returns: {
+          applied: boolean;
+          client_updated_at: string | null;
+          conflict_id: string | null;
+          progress_map: Json;
+          revision: number;
+          teacher_notes: string;
+          updated_at: string;
+        }[];
       };
       reset_monthly_transforms: {
         Args: Record<PropertyKey, never>;

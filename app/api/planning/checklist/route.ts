@@ -17,7 +17,34 @@ const UpsertSchema = z.object({
   progressMap: z.record(z.string(), z.enum(["done", "in_progress", "not_started"])),
   teacherNotes: z.string().max(5000),
   updatedAt: z.string().datetime(),
+  baseRevision: z.number().int().min(0).nullable().optional(),
+  resolvedConflictId: z.string().uuid().nullable().optional(),
+  resolutionStrategy: z.enum(["server", "merged", "local"]).nullable().optional(),
 });
+
+interface PlanningChecklistCloudState {
+  progressMap: ChecklistProgressMap;
+  revision: number | null;
+  serverUpdatedAt?: string;
+  teacherNotes: string;
+  updatedAt: string;
+}
+
+function toCloudState(data: {
+  client_updated_at?: string | null;
+  progress_map: Json | null;
+  revision?: number | null;
+  teacher_notes: string | null;
+  updated_at: string;
+}): PlanningChecklistCloudState {
+  return {
+    progressMap: (data.progress_map ?? {}) as ChecklistProgressMap,
+    revision: data.revision ?? null,
+    serverUpdatedAt: data.updated_at,
+    teacherNotes: data.teacher_notes ?? "",
+    updatedAt: data.client_updated_at ?? data.updated_at,
+  };
+}
 
 type AuthContext =
   | {
@@ -98,7 +125,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const { data, error } = await context.supabase
     .from("planning_checklists")
-    .select("progress_map, teacher_notes, updated_at")
+    .select("progress_map, teacher_notes, updated_at, client_updated_at, revision")
     .eq("user_id", context.profile.id)
     .eq("subject_id", subjectId)
     .eq("area_id", areaId)
@@ -114,11 +141,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   return NextResponse.json(
     {
-      state: {
-        progressMap: (data.progress_map ?? {}) as ChecklistProgressMap,
-        teacherNotes: data.teacher_notes ?? "",
-        updatedAt: data.updated_at,
-      },
+      state: toCloudState(data),
     },
     { status: 200 },
   );
@@ -144,59 +167,58 @@ export async function POST(req: NextRequest): Promise<Response> {
     return context.error;
   }
 
-  const { areaId, subjectId, progressMap, teacherNotes, updatedAt } = parsed.data;
-  const incomingTimestamp = new Date(updatedAt).getTime();
+  const {
+    areaId,
+    baseRevision,
+    progressMap,
+    resolvedConflictId,
+    resolutionStrategy,
+    subjectId,
+    teacherNotes,
+    updatedAt,
+  } = parsed.data;
 
-  const { data: existingRow } = await context.supabase
-    .from("planning_checklists")
-    .select("progress_map, teacher_notes, updated_at")
-    .eq("user_id", context.profile.id)
-    .eq("subject_id", subjectId)
-    .eq("area_id", areaId)
-    .maybeSingle();
-
-  if (existingRow) {
-    const existingTimestamp = new Date(existingRow.updated_at).getTime();
-
-    if (!Number.isNaN(existingTimestamp) && existingTimestamp > incomingTimestamp) {
-      return NextResponse.json(
-        {
-          error: "Nyare version finns i cloudsync.",
-          code: "CONFLICT_NEWER_SERVER_STATE",
-          state: {
-            progressMap: (existingRow.progress_map ?? {}) as ChecklistProgressMap,
-            teacherNotes: existingRow.teacher_notes ?? "",
-            updatedAt: existingRow.updated_at,
-          },
-          mergedState: {
-            progressMap: mergeProgressMaps(
-              (existingRow.progress_map ?? {}) as ChecklistProgressMap,
-              progressMap,
-            ),
-            teacherNotes: mergeTeacherNotes(existingRow.teacher_notes ?? "", teacherNotes),
-            updatedAt: existingRow.updated_at,
-          },
-        },
-        { status: 409 },
-      );
-    }
-  }
-
-  const { error } = await context.supabase.from("planning_checklists").upsert(
-    {
-      user_id: context.profile.id,
-      subject_id: subjectId,
-      area_id: areaId,
-      progress_map: progressMap as Json,
-      teacher_notes: teacherNotes,
-      updated_at: updatedAt,
-    },
-    { onConflict: "user_id,subject_id,area_id" },
-  );
+  const { data, error } = await context.supabase.rpc("save_planning_checklist_revisioned", {
+    p_area_id: areaId,
+    p_base_revision: baseRevision ?? null,
+    p_client_updated_at: updatedAt,
+    p_progress_map: progressMap as Json,
+    p_resolution_strategy: resolutionStrategy ?? null,
+    p_resolved_conflict_id: resolvedConflictId ?? null,
+    p_subject_id: subjectId,
+    p_teacher_notes: teacherNotes,
+  });
 
   if (error) {
     return NextResponse.json({ error: "Kunde inte spara cloudsync" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true }, { status: 200 });
+  const result = data?.[0];
+
+  if (!result) {
+    return NextResponse.json({ error: "Kunde inte spara cloudsync" }, { status: 500 });
+  }
+
+  const state = toCloudState(result);
+
+  if (!result.applied) {
+    return NextResponse.json(
+      {
+        error: "Nyare version finns i cloudsync.",
+        code: "CONFLICT_STALE_PLANNING_REVISION",
+        conflictId: result.conflict_id,
+        state,
+        mergedState: {
+          progressMap: mergeProgressMaps(state.progressMap, progressMap),
+          revision: state.revision,
+          serverUpdatedAt: state.serverUpdatedAt,
+          teacherNotes: mergeTeacherNotes(state.teacherNotes, teacherNotes),
+          updatedAt: state.updatedAt,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  return NextResponse.json({ ok: true, state }, { status: 200 });
 }

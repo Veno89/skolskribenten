@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { MissingProfileState } from "@/components/dashboard/MissingProfileState";
+import { isCurrentUserAppAdmin } from "@/lib/admin/server";
 import { loadDashboardProfile } from "@/lib/dashboard/load-dashboard-profile";
-import { isCurrentUserSupportAdmin } from "@/lib/support/admin-server";
 
 interface Props {
   children: ReactNode;
@@ -15,11 +15,11 @@ export default async function DashboardLayout({ children }: Props): Promise<JSX.
     return <MissingProfileState />;
   }
 
-  const isSupportAdmin = await isCurrentUserSupportAdmin(profile.id);
+  const isAppAdmin = await isCurrentUserAppAdmin(profile.id);
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--ss-neutral-50)]">
-      <DashboardNav profile={profile} isSupportAdmin={isSupportAdmin} />
+      <DashboardNav profile={profile} isAppAdmin={isAppAdmin} />
       <div className="flex-1">
         {children}
       </div>

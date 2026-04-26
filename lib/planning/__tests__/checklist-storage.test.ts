@@ -33,9 +33,43 @@ describe("planning checklist storage", () => {
       progressMap: {
         a: "done",
       },
+      revision: null,
       teacherNotes: "test",
       updatedAt: "2026-04-20T00:00:00.000Z",
     });
+  });
+
+  it("preserves planning revisions in stored and exported state", () => {
+    const serialized = serializeChecklistState({
+      progressMap: {
+        a: "done",
+      },
+      revision: 7,
+      teacherNotes: "test",
+      updatedAt: "2026-04-20T00:00:00.000Z",
+    });
+
+    expect(parseStoredChecklist(serialized)?.revision).toBe(7);
+
+    const parsed = parsePlanningExportPayload(
+      JSON.stringify({
+        version: 1,
+        exportedAt: "2026-04-20T00:00:00.000Z",
+        entries: [
+          {
+            key: "skolskribenten:planning:user-1:historia:test",
+            state: {
+              progressMap: {},
+              revision: 9,
+              teacherNotes: "test",
+              updatedAt: "2026-04-20T00:00:00.000Z",
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(parsed?.entries[0]?.state.revision).toBe(9);
   });
 
   it("returns null for invalid payload", () => {

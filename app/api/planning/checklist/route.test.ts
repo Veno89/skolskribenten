@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
+const mockRpc = vi.fn();
 const mockUpsert = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -11,6 +12,7 @@ vi.mock("@/lib/supabase/server", () => ({
       getUser: mockGetUser,
     },
     from: mockFrom,
+    rpc: mockRpc,
   }),
 }));
 
@@ -42,6 +44,7 @@ describe("/api/planning/checklist", () => {
     });
 
     mockUpsert.mockResolvedValue({ error: null });
+    mockRpc.mockResolvedValue({ data: [], error: null });
   });
 
   it("rejects unauthenticated users", async () => {
@@ -101,6 +104,8 @@ describe("/api/planning/checklist", () => {
                 },
                 teacher_notes: "Fokusera på källkritik nästa vecka.",
                 updated_at: "2026-04-20T10:00:00.000Z",
+                client_updated_at: "2026-04-20T09:30:00.000Z",
+                revision: 4,
               },
             })),
           upsert: mockUpsert,
@@ -124,7 +129,9 @@ describe("/api/planning/checklist", () => {
           item1: "done",
         },
         teacherNotes: "Fokusera på källkritik nästa vecka.",
-        updatedAt: "2026-04-20T10:00:00.000Z",
+        updatedAt: "2026-04-20T09:30:00.000Z",
+        serverUpdatedAt: "2026-04-20T10:00:00.000Z",
+        revision: 4,
       },
     });
   });
@@ -173,6 +180,7 @@ describe("/api/planning/checklist", () => {
           },
           teacherNotes: "Planerar uppföljning.",
           updatedAt: "2026-04-20T10:00:00.000Z",
+          baseRevision: null,
         }),
       }) as never,
     );
@@ -213,24 +221,24 @@ describe("/api/planning/checklist", () => {
         };
       }
 
-      if (table === "planning_checklists") {
-        return {
-          select: vi.fn(() =>
-            createSelectChain({
-              data: {
-                progress_map: {
-                  item1: "done",
-                  item2: "in_progress",
-                },
-                teacher_notes: "Servernotering",
-                updated_at: "2026-04-20T12:00:00.000Z",
-              },
-            })),
-          upsert: mockUpsert,
-        };
-      }
-
       throw new Error(`Unexpected table: ${table}`);
+    });
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          applied: false,
+          conflict_id: "11111111-1111-4111-8111-111111111111",
+          progress_map: {
+            item1: "done",
+            item2: "in_progress",
+          },
+          teacher_notes: "Servernotering",
+          updated_at: "2026-04-20T12:00:00.000Z",
+          client_updated_at: "2026-04-20T11:30:00.000Z",
+          revision: 3,
+        },
+      ],
+      error: null,
     });
 
     const { POST } = await import("@/app/api/planning/checklist/route");
@@ -246,6 +254,7 @@ describe("/api/planning/checklist", () => {
           },
           teacherNotes: "Lokal notering",
           updatedAt: "2026-04-20T10:00:00.000Z",
+          baseRevision: 2,
         }),
       }) as never,
     );
@@ -253,28 +262,45 @@ describe("/api/planning/checklist", () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
       error: "Nyare version finns i cloudsync.",
-      code: "CONFLICT_NEWER_SERVER_STATE",
+      code: "CONFLICT_STALE_PLANNING_REVISION",
+      conflictId: "11111111-1111-4111-8111-111111111111",
       state: {
         progressMap: {
           item1: "done",
           item2: "in_progress",
         },
+        revision: 3,
+        serverUpdatedAt: "2026-04-20T12:00:00.000Z",
         teacherNotes: "Servernotering",
-        updatedAt: "2026-04-20T12:00:00.000Z",
+        updatedAt: "2026-04-20T11:30:00.000Z",
       },
       mergedState: {
         progressMap: {
           item1: "done",
           item2: "in_progress",
         },
+        revision: 3,
+        serverUpdatedAt: "2026-04-20T12:00:00.000Z",
         teacherNotes: "Servernotering\n\n---\n\nLokal notering",
-        updatedAt: "2026-04-20T12:00:00.000Z",
+        updatedAt: "2026-04-20T11:30:00.000Z",
       },
     });
-    expect(mockUpsert).not.toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenCalledWith("save_planning_checklist_revisioned", {
+      p_area_id: "industriella-revolutionen",
+      p_base_revision: 2,
+      p_client_updated_at: "2026-04-20T10:00:00.000Z",
+      p_progress_map: {
+        item1: "in_progress",
+        item2: "not_started",
+      },
+      p_resolution_strategy: null,
+      p_resolved_conflict_id: null,
+      p_subject_id: "historia",
+      p_teacher_notes: "Lokal notering",
+    });
   });
 
-  it("upserts planning state when the incoming version is current", async () => {
+  it("saves planning state when the incoming base revision is current", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "profiles") {
         return {
@@ -303,17 +329,23 @@ describe("/api/planning/checklist", () => {
         };
       }
 
-      if (table === "planning_checklists") {
-        return {
-          select: vi.fn(() =>
-            createSelectChain({
-              data: null,
-            })),
-          upsert: mockUpsert,
-        };
-      }
-
       throw new Error(`Unexpected table: ${table}`);
+    });
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          applied: true,
+          conflict_id: null,
+          progress_map: {
+            item1: "done",
+          },
+          teacher_notes: "Planerar uppföljning.",
+          updated_at: "2026-04-20T10:00:05.000Z",
+          client_updated_at: "2026-04-20T10:00:00.000Z",
+          revision: 1,
+        },
+      ],
+      error: null,
     });
 
     const { POST } = await import("@/app/api/planning/checklist/route");
@@ -328,24 +360,33 @@ describe("/api/planning/checklist", () => {
           },
           teacherNotes: "Planerar uppföljning.",
           updatedAt: "2026-04-20T10:00:00.000Z",
+          baseRevision: null,
         }),
       }) as never,
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true });
-    expect(mockUpsert).toHaveBeenCalledWith(
-      {
-        user_id: "user-123",
-        subject_id: "historia",
-        area_id: "industriella-revolutionen",
-        progress_map: {
-          item1: "done",
-        },
-        teacher_notes: "Planerar uppföljning.",
-        updated_at: "2026-04-20T10:00:00.000Z",
+    const json = await response.json();
+    expect(json.ok).toBe(true);
+    expect(json.state).toMatchObject({
+      progressMap: {
+        item1: "done",
       },
-      { onConflict: "user_id,subject_id,area_id" },
-    );
+      revision: 1,
+      serverUpdatedAt: "2026-04-20T10:00:05.000Z",
+      updatedAt: "2026-04-20T10:00:00.000Z",
+    });
+    expect(mockRpc).toHaveBeenCalledWith("save_planning_checklist_revisioned", {
+      p_area_id: "industriella-revolutionen",
+      p_base_revision: null,
+      p_client_updated_at: "2026-04-20T10:00:00.000Z",
+      p_progress_map: {
+        item1: "done",
+      },
+      p_resolution_strategy: null,
+      p_resolved_conflict_id: null,
+      p_subject_id: "historia",
+      p_teacher_notes: "Planerar uppföljning.",
+    });
   });
 });

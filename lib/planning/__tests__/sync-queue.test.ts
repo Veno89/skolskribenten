@@ -34,6 +34,57 @@ describe("planning sync queue", () => {
     expect(parsed[0]?.subjectId).toBe("historia");
     expect(parsed[0]?.status).toBe("pending");
     expect(parsed[0]?.retryCount).toBe(0);
+    expect(parsed[0]?.baseRevision).toBeNull();
+    expect(parsed[0]?.resolvedConflictId).toBeNull();
+    expect(parsed[0]?.resolutionStrategy).toBeNull();
+  });
+
+  it("preserves revision and conflict metadata for replayed resolutions", () => {
+    const serialized = serializePlanningSyncQueue([
+      {
+        areaId: "area",
+        baseRevision: 4,
+        conflictState: {
+          conflictId: "11111111-1111-4111-8111-111111111111",
+          localState: {
+            progressMap: { a: "in_progress" },
+            revision: 3,
+            teacherNotes: "local",
+            updatedAt: "2026-04-20T00:00:00.000Z",
+          },
+          serverState: {
+            progressMap: { a: "done" },
+            revision: 4,
+            serverUpdatedAt: "2026-04-20T00:20:00.000Z",
+            teacherNotes: "server",
+            updatedAt: "2026-04-20T00:10:00.000Z",
+          },
+        },
+        enqueuedAt: "2026-04-20T00:30:00.000Z",
+        lastAttemptAt: "2026-04-20T00:40:00.000Z",
+        lastError: "conflict",
+        progressMap: { a: "done" },
+        resolvedConflictId: "11111111-1111-4111-8111-111111111111",
+        resolutionStrategy: "server",
+        retryCount: 1,
+        revision: 4,
+        status: "pending",
+        subjectId: "historia",
+        teacherNotes: "server",
+        updatedAt: "2026-04-20T00:10:00.000Z",
+      },
+    ]);
+
+    const parsed = parsePlanningSyncQueue(serialized);
+
+    expect(parsed[0]).toMatchObject({
+      baseRevision: 4,
+      resolvedConflictId: "11111111-1111-4111-8111-111111111111",
+      resolutionStrategy: "server",
+      revision: 4,
+    });
+    expect(parsed[0]?.conflictState?.conflictId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(parsed[0]?.conflictState?.serverState.revision).toBe(4);
   });
 
   it("de-duplicates by subject+area when enqueueing", () => {
@@ -153,6 +204,9 @@ describe("planning sync queue", () => {
 
     expect(pending.status).toBe("pending");
     expect(pending.conflictState).toBeNull();
+    expect(pending.baseRevision).toBe(base.baseRevision);
+    expect(pending.resolvedConflictId).toBeNull();
+    expect(pending.resolutionStrategy).toBeNull();
     expect(pending.teacherNotes).toBe("retry");
     expect(getPlanningSyncItemKey(pending)).toBe("historia:area");
     expect(removePlanningSyncItem([pending], pending)).toEqual([]);

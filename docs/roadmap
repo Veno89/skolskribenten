@@ -17,10 +17,11 @@ This roadmap tracks current product and security priorities. `docs/audit.md` is 
 - Remaining: deployed alert validation, scheduled retention automation, abuse dashboard, and runbooks for AI provider failures, planning sync conflicts, account deletion, and release rollback.
 
 ## Phase C: Planning Sync Reliability
-- Replace timestamp-only conflict detection with server-generated revisions and conditional writes.
-- Make `updated_at` server-owned and store client edit timestamps separately.
-- Add conflict history/audit rows and tests for stale queue replay, duplicate flushes, offline/online races, and multi-device edits.
-- Keep product copy honest until this becomes revisioned sync: best-effort backup/sync, not collaboration-grade sync.
+- Landed baseline: timestamp-only conflict detection has been replaced with server-generated revisions, conditional writes, server-owned `updated_at`, separate `client_updated_at`, and durable planning conflict audit rows.
+- Landed client support: local storage/import/export and the replay queue now preserve revisions, conflict IDs, server timestamps, and resolution strategy.
+- Landed operations support: `/admin/planning-sync` exposes conflict counts, unresolved/resolved filters, recent sync rows, and clock-drift signals without showing raw teacher notes.
+- Remaining: browser-flow tests for offline/online resolution, deployed migration verification, alerting for conflict spikes, and the final cloud policy for teacher notes.
+- Keep product copy honest: this is revisioned backup/sync, not collaboration-grade real-time editing.
 
 ## Phase D: AI Quality And Safety
 - Version prompts/models in usage metadata.

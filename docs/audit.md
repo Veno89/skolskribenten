@@ -27,7 +27,7 @@ Verified locally on April 26, 2026:
 
 Result:
 - all three checks passed
-- the test suite is currently at 158 passing tests
+- the billing hardening pass had 158 passing tests at that point
 
 Remaining launch gates:
 - apply migrations `013_billing_hardening.sql` and `014_authoritative_entitlement_hardening.sql` to the target Supabase environment
@@ -56,6 +56,15 @@ Phase B implementation update:
 - New support intake can emit a sanitized info event to `OPS_ALERT_WEBHOOK_URL` without submitted name, email, role, or message text.
 - `pnpm support:retention` and `pnpm support:retention:repair` provide dry-run-first soft deletion for resolved/spam support rows older than the retention cutoff.
 - `docs/support-operations.md` now defines admin access, status meanings, triage, redaction, deletion, retention, and incident handling.
+
+Phase C implementation update:
+- `supabase/migrations/017_revisioned_planning_sync.sql` adds server-owned planning revisions, separate client edit timestamps, a `planning_sync_conflicts` audit table, and a transactional `save_planning_checklist_revisioned` RPC.
+- Planning checklist writes now require `baseRevision` once a cloud row exists; stale writes return `409 CONFLICT_STALE_PLANNING_REVISION` with server and merged states rather than relying on client-supplied timestamps.
+- Conflict rows record scope, server/client revisions, server/client progress maps, note hashes/lengths, and resolution metadata without storing duplicate raw teacher notes.
+- The planning sync queue now preserves revision tokens, conflict IDs, server timestamps, and resolution strategy, and autosave waits while a current-scope queue item is pending.
+- Local checklist storage and planning import/export preserve cloud revision metadata so stale offline edits replay through the same guarded path.
+- `/admin/planning-sync` now gives server-gated visibility into conflict counts, unresolved/resolved conflict rows, recent sync rows, and clock-drift signals without displaying raw teacher notes.
+- `docs/planning-sync-operations.md` documents the planning sync state model and conflict/drift runbook.
 
 ### Highest-Priority Findings
 #### 1. Support intake can become an accidental sensitive-content database
@@ -96,24 +105,24 @@ Fix direction:
 - Keep import size limits, safer parse errors, and export warnings covered by tests.
 - Decide whether planning teacher notes should be scrubbed/rejected before cloud sync, or whether the feature is explicitly allowed to store teacher notes under a documented policy.
 
-#### 3. Planning cloud sync is useful, but not yet a reliable synchronization system
-Severity: High
+#### 3. Planning cloud sync is now revisioned, but still needs operational maturity
+Severity: Medium-High
 
 Why it matters:
-Teachers will read "cloudsync" as dependable cross-device state. The current implementation is a best-effort last-timestamp flow with heuristic merging. It is good MVP work, but it does not yet provide server-authored revisions, idempotency, conflict history, or deterministic convergence under races.
+Teachers will read "cloudsync" as dependable cross-device state. The implementation now has server-authored revisions, conditional writes, and conflict history, which removes the largest timestamp race. It is still not collaboration-grade real-time sync and still needs operational visibility around conflicts and drift.
 
 Evidence:
-- `app/api/planning/checklist/route.ts` trusts client-supplied `updatedAt` and only detects conflicts when the existing server timestamp is newer.
+- `app/api/planning/checklist/route.ts` calls `save_planning_checklist_revisioned` and returns server/merged states on stale `baseRevision`.
+- `supabase/migrations/017_revisioned_planning_sync.sql` makes `planning_checklists.updated_at` server-owned, adds `client_updated_at`, and stores planning conflict audit rows.
 - `lib/planning/cloud-merge.ts` merges checklist status by "highest status wins" and concatenates notes with a divider.
-- `hooks/usePlanningChecklist.ts` maintains a client-side queue in browser storage and replays it sequentially, but the server does not enforce revision tokens or optimistic-lock preconditions.
-- `planning_checklists.updated_at` is both client-written and touched by the database trigger, which makes the semantic meaning of the timestamp easy to misunderstand.
+- `hooks/usePlanningChecklist.ts` maintains a client-side queue in browser storage and replays revisioned writes sequentially.
+- `/admin/planning-sync` exposes conflict counts, conflict metadata, recent sync rows, and client-clock drift signals without raw notes.
 
 Fix direction:
-- Add server-generated `revision` or `version` and require clients to send `baseRevision`.
-- Move conflict detection into a transactional RPC or conditional update.
-- Store conflict/audit rows for rejected writes and manual resolutions.
-- Make `updated_at` server-owned and separate it from client-observed edit timestamps.
-- Adjust product copy: "best-effort backup/sync" until the versioned model exists.
+- Add alerting for planning sync conflict spikes and repeated stale-write failures.
+- Add browser-level tests for offline/online conflict resolution flows, not only route and storage tests.
+- Decide whether planning teacher notes should be scrubbed/rejected before cloud sync, or whether the feature explicitly stores teacher notes under a documented policy.
+- Keep product copy honest: revisioned sync is reliable backup/sync, not multi-user collaborative editing.
 
 #### 4. AI safety is mostly prompt-and-scrubber based, with no evaluation harness or post-generation guard
 Severity: Medium-High
@@ -191,7 +200,7 @@ Fix direction:
 - Privacy controls: local autosave setting, deeper planning cloud-sync storage policy, export/delete account data, support-message deletion request flow. A clear-all local data path now exists.
 - AI governance: prompt/model versioning, golden evals, red-team cases, output warnings, teacher feedback/rating, issue-report-without-content workflow.
 - Support operations: deployed notification validation, scheduled retention automation, abuse dashboard, and broader incident runbooks. A minimal admin queue, status/owner fields, redaction/deletion actions, sanitized notifications, retention tooling, and support PII runbook now exist.
-- Planning reliability: revisioned sync, server-owned timestamps, deterministic conflict handling, conflict audit history, import/export guardrails.
+- Planning reliability: revisioned sync, server-owned timestamps, deterministic conflict handling, conflict audit history, import/export guardrails, and admin conflict visibility. Remaining work is alerting, browser-flow coverage, and a final teacher-notes cloud policy.
 - Account management: email change, account deletion, data export, session/device visibility, optional MFA/security settings.
 - Release confidence: staging smoke tests, production smoke tests, accessibility record, live AI provider smoke, uptime/error monitoring.
 
@@ -207,9 +216,8 @@ Phase B: Support and operations
 - Remaining: deployed alert validation, scheduled retention automation, abuse dashboard, and incident runbooks for AI provider failures, planning sync conflicts, and account deletion.
 
 Phase C: Planning sync reliability
-- Introduce server-generated revisions and conditional writes.
-- Make timestamps server-owned and preserve client edit timestamps separately.
-- Add conflict audit rows and stronger tests for multi-device races, stale queue replay, duplicate queue flushes, and offline/online transitions.
+- Implemented baseline: server-generated revisions, conditional writes through a transactional RPC, server-owned `updated_at`, separate `client_updated_at`, durable conflict audit rows, revision-aware queue replay, route/storage tests, and an admin/debug page for conflicts and drift.
+- Remaining: browser-flow coverage for offline/online resolution, deployed migration verification, alerting for conflict spikes, and a final policy decision on synced teacher notes.
 
 Phase D: AI quality and safety
 - Add prompt/model version fields to usage events.
@@ -237,6 +245,18 @@ Result:
 - typecheck, lint, retention script syntax check, and production build passed
 - Vitest passed with 167 tests. The package script forwarded the path filter as a literal `--`, so the command exercised the full suite rather than only the named files.
 
+Non-billing Phase C implementation verification on April 26, 2026:
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm lint`
+- `pnpm build`
+
+Result:
+- typecheck passed
+- Vitest passed with 173 tests
+- lint passed with no warnings or errors
+- production build passed
+
 Verified on April 23, 2026:
 - `pnpm typecheck`
 - `pnpm lint`
@@ -245,7 +265,7 @@ Verified on April 23, 2026:
 
 Result:
 - all four checks passed
-- the test suite is currently at 134 passing tests
+- the April 23 baseline had 134 passing tests at that point
 
 Live Supabase note:
 - Supabase MCP access was available again on April 23, 2026, so I was able to refresh limited live project signals in this session.

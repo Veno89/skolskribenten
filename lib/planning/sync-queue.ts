@@ -1,14 +1,18 @@
 import type { ChecklistProgressMap } from "@/lib/planning/gap-analysis";
 
 export type PlanningSyncQueueStatus = "pending" | "failed" | "conflict";
+export type PlanningConflictResolutionStrategy = "server" | "merged" | "local";
 
 export interface PlanningSyncStateSnapshot {
   progressMap: ChecklistProgressMap;
+  revision?: number | null;
+  serverUpdatedAt?: string;
   teacherNotes: string;
   updatedAt: string;
 }
 
 export interface PlanningSyncConflictState {
+  conflictId?: string | null;
   localState: PlanningSyncStateSnapshot;
   mergedState?: PlanningSyncStateSnapshot;
   serverState: PlanningSyncStateSnapshot;
@@ -16,10 +20,13 @@ export interface PlanningSyncConflictState {
 
 export interface PlanningSyncQueueItem extends PlanningSyncStateSnapshot {
   areaId: string;
+  baseRevision: number | null;
   conflictState: PlanningSyncConflictState | null;
   enqueuedAt: string;
   lastAttemptAt: string;
   lastError: string;
+  resolvedConflictId: string | null;
+  resolutionStrategy: PlanningConflictResolutionStrategy | null;
   retryCount: number;
   status: PlanningSyncQueueStatus;
   subjectId: string;
@@ -60,6 +67,12 @@ function parseConflictState(value: unknown): PlanningSyncConflictState | null {
 
     return {
       progressMap: candidateSnapshot.progressMap as ChecklistProgressMap,
+      revision:
+        typeof candidateSnapshot.revision === "number" && Number.isInteger(candidateSnapshot.revision)
+          ? candidateSnapshot.revision
+          : null,
+      serverUpdatedAt:
+        typeof candidateSnapshot.serverUpdatedAt === "string" ? candidateSnapshot.serverUpdatedAt : undefined,
       teacherNotes: candidateSnapshot.teacherNotes,
       updatedAt: candidateSnapshot.updatedAt,
     };
@@ -74,6 +87,7 @@ function parseConflictState(value: unknown): PlanningSyncConflictState | null {
   }
 
   return {
+    conflictId: typeof candidate.conflictId === "string" ? candidate.conflictId : null,
     localState,
     mergedState: mergedState ?? undefined,
     serverState,
@@ -94,12 +108,28 @@ function normalizePlanningSyncItem(item: Partial<PlanningSyncQueueItem>): Planni
 
   return {
     areaId: item.areaId,
+    baseRevision:
+      typeof item.baseRevision === "number" && Number.isInteger(item.baseRevision)
+        ? item.baseRevision
+        : typeof item.revision === "number" && Number.isInteger(item.revision)
+          ? item.revision
+          : null,
     conflictState: parseConflictState(item.conflictState),
     enqueuedAt: typeof item.enqueuedAt === "string" ? item.enqueuedAt : new Date().toISOString(),
     lastAttemptAt: typeof item.lastAttemptAt === "string" ? item.lastAttemptAt : "",
     lastError: typeof item.lastError === "string" ? item.lastError : "",
     progressMap: item.progressMap as ChecklistProgressMap,
+    resolvedConflictId: typeof item.resolvedConflictId === "string" ? item.resolvedConflictId : null,
+    resolutionStrategy:
+      item.resolutionStrategy === "server" ||
+      item.resolutionStrategy === "merged" ||
+      item.resolutionStrategy === "local"
+        ? item.resolutionStrategy
+        : null,
+    revision:
+      typeof item.revision === "number" && Number.isInteger(item.revision) ? item.revision : null,
     retryCount: typeof item.retryCount === "number" && Number.isFinite(item.retryCount) ? item.retryCount : 0,
+    serverUpdatedAt: typeof item.serverUpdatedAt === "string" ? item.serverUpdatedAt : undefined,
     status: isQueueStatus(item.status) ? item.status : "pending",
     subjectId: item.subjectId,
     teacherNotes: item.teacherNotes,
@@ -148,13 +178,17 @@ export function createPlanningSyncQueueItem(
   item: Pick<
     PlanningSyncQueueItem,
     "areaId" | "enqueuedAt" | "progressMap" | "subjectId" | "teacherNotes" | "updatedAt"
-  >,
+  > &
+    Partial<Pick<PlanningSyncQueueItem, "baseRevision" | "revision" | "serverUpdatedAt">>,
 ): PlanningSyncQueueItem {
   return {
     ...item,
+    baseRevision: item.baseRevision ?? item.revision ?? null,
     conflictState: null,
     lastAttemptAt: "",
     lastError: "",
+    resolvedConflictId: null,
+    resolutionStrategy: null,
     retryCount: 0,
     status: "pending",
   };
@@ -227,15 +261,29 @@ export function markPlanningSyncItemConflict(
 export function markPlanningSyncItemPending(
   item: PlanningSyncQueueItem,
   params?: Partial<
-    Pick<PlanningSyncQueueItem, "progressMap" | "teacherNotes" | "updatedAt" | "enqueuedAt">
+    Pick<
+      PlanningSyncQueueItem,
+      | "baseRevision"
+      | "enqueuedAt"
+      | "progressMap"
+      | "resolvedConflictId"
+      | "resolutionStrategy"
+      | "revision"
+      | "teacherNotes"
+      | "updatedAt"
+    >
   >,
 ): PlanningSyncQueueItem {
   return {
     ...item,
+    baseRevision: params?.baseRevision ?? item.baseRevision,
     conflictState: null,
     enqueuedAt: params?.enqueuedAt ?? item.enqueuedAt,
     lastError: "",
     progressMap: params?.progressMap ?? item.progressMap,
+    resolvedConflictId: params?.resolvedConflictId ?? item.resolvedConflictId,
+    resolutionStrategy: params?.resolutionStrategy ?? item.resolutionStrategy,
+    revision: params?.revision ?? item.revision,
     status: "pending",
     teacherNotes: params?.teacherNotes ?? item.teacherNotes,
     updatedAt: params?.updatedAt ?? item.updatedAt,

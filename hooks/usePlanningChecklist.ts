@@ -32,14 +32,19 @@ type CloudStatus = "idle" | "syncing" | "synced" | "error" | "conflict";
 
 type PlanningSyncResponsePayload = {
   code?: string;
+  conflictId?: string | null;
   error?: string;
   mergedState?: {
     progressMap: ChecklistProgressMap;
+    revision?: number | null;
+    serverUpdatedAt?: string;
     teacherNotes: string;
     updatedAt: string;
   };
   state?: {
     progressMap: ChecklistProgressMap;
+    revision?: number | null;
+    serverUpdatedAt?: string;
     teacherNotes: string;
     updatedAt: string;
   };
@@ -55,6 +60,7 @@ function isCurrentScope(
 function buildConflictState(
   localState: {
     progressMap: ChecklistProgressMap;
+    revision?: number | null;
     teacherNotes: string;
     updatedAt: string;
   },
@@ -65,6 +71,7 @@ function buildConflictState(
   }
 
   return {
+    conflictId: payload.conflictId ?? null,
     localState,
     mergedState: payload.mergedState,
     serverState: payload.state,
@@ -81,6 +88,7 @@ export function usePlanningChecklist(params: {
   const [progressMap, setProgressMap] = useState<ChecklistProgressMap>(() => getDefaultStatusMap(area));
   const [teacherNotes, setTeacherNotes] = useState("");
   const [updatedAt, setUpdatedAt] = useState("");
+  const [cloudRevision, setCloudRevision] = useState<number | null>(null);
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>("idle");
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncLog, setSyncLog] = useState<string[]>([]);
@@ -93,9 +101,10 @@ export function usePlanningChecklist(params: {
   const storageKey = getPlanningStorageKey(userId, subjectId, area.id);
   const syncQueueKey = getPlanningSyncQueueKey(userId);
   const currentScope = { areaId: area.id, subjectId };
-  const currentQueuedConflict = queuedItems.find(
-    (item) => isCurrentScope(item, currentScope) && item.status === "conflict" && item.conflictState,
-  );
+  const currentQueuedItem = queuedItems.find((item) => isCurrentScope(item, currentScope));
+  const currentQueuedConflict =
+    currentQueuedItem?.status === "conflict" && currentQueuedItem.conflictState ? currentQueuedItem : undefined;
+  const hasPendingQueuedItem = queuedItems.some((item) => item.status === "pending");
 
   const appendSyncLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString("sv-SE", {
@@ -137,6 +146,8 @@ export function usePlanningChecklist(params: {
     target: { areaId: string; subjectId: string },
     state: {
       progressMap: ChecklistProgressMap;
+      revision?: number | null;
+      serverUpdatedAt?: string;
       teacherNotes: string;
       updatedAt: string;
     },
@@ -153,6 +164,7 @@ export function usePlanningChecklist(params: {
 
   const applyStateToActiveArea = (target: { areaId: string; subjectId: string }, state: PlanningSyncQueueItem | {
     progressMap: ChecklistProgressMap;
+    revision?: number | null;
     teacherNotes: string;
     updatedAt: string;
   }) => {
@@ -161,6 +173,7 @@ export function usePlanningChecklist(params: {
     }
 
     setProgressMap({ ...getDefaultStatusMap(area), ...state.progressMap });
+    setCloudRevision(state.revision ?? null);
     setTeacherNotes(state.teacherNotes);
     setUpdatedAt(state.updatedAt);
   };
@@ -175,6 +188,7 @@ export function usePlanningChecklist(params: {
 
     if (!stored) {
       setProgressMap(defaults);
+      setCloudRevision(null);
       setTeacherNotes("");
       setUpdatedAt("");
       setHasHydratedLocal(true);
@@ -182,6 +196,7 @@ export function usePlanningChecklist(params: {
     }
 
     setProgressMap({ ...defaults, ...stored.progressMap });
+    setCloudRevision(stored.revision ?? null);
     setTeacherNotes(stored.teacherNotes);
     setUpdatedAt(stored.updatedAt);
     setHasHydratedLocal(true);
@@ -189,7 +204,11 @@ export function usePlanningChecklist(params: {
 
   const enqueueSyncPayload = (payload: {
     areaId: string;
+    baseRevision?: number | null;
     progressMap: ChecklistProgressMap;
+    resolvedConflictId?: string | null;
+    resolutionStrategy?: "server" | "merged" | "local" | null;
+    revision?: number | null;
     subjectId: string;
     teacherNotes: string;
     updatedAt: string;
@@ -203,6 +222,7 @@ export function usePlanningChecklist(params: {
       currentQueue,
       createPlanningSyncQueueItem({
         ...payload,
+        baseRevision: payload.baseRevision ?? payload.revision ?? cloudRevision,
         enqueuedAt: new Date().toISOString(),
       }),
     );
@@ -212,7 +232,10 @@ export function usePlanningChecklist(params: {
 
   const postPlanningChecklistState = async (payload: {
     areaId: string;
+    baseRevision?: number | null;
     progressMap: ChecklistProgressMap;
+    resolvedConflictId?: string | null;
+    resolutionStrategy?: "server" | "merged" | "local" | null;
     subjectId: string;
     teacherNotes: string;
     updatedAt: string;
@@ -248,8 +271,10 @@ export function usePlanningChecklist(params: {
       currentQueue.find((item) => isCurrentScope(item, target)) ??
       createPlanningSyncQueueItem({
         areaId: target.areaId,
+        baseRevision: conflictState.localState.revision ?? null,
         enqueuedAt: new Date().toISOString(),
         progressMap: conflictState.localState.progressMap,
+        revision: conflictState.localState.revision ?? null,
         subjectId: target.subjectId,
         teacherNotes: conflictState.localState.teacherNotes,
         updatedAt: conflictState.localState.updatedAt,
@@ -262,31 +287,20 @@ export function usePlanningChecklist(params: {
           ? conflictState.mergedState
           : conflictState.localState;
 
-    if (strategy === "server") {
-      const nextQueue = removePlanningSyncItem(currentQueue, target);
-      writeStoredChecklistState(target, baseState);
-      persistQueueState(nextQueue);
-      applyStateToActiveArea(target, baseState);
-      if (isCurrentScope(target, currentScope)) {
-        setPendingConflict(null);
-        setCloudStatus("synced");
-        setLastSyncedAt(baseState.updatedAt);
-      }
-      appendSyncLog(
-        `Konflikt löst: ${getConflictStrategyLabel(strategy)} valdes för ${target.subjectId}/${target.areaId}.`,
-      );
-      return;
-    }
-
-    const nextUpdatedAt = new Date().toISOString();
+    const nextUpdatedAt = strategy === "server" ? baseState.updatedAt : new Date().toISOString();
     const nextState = {
       progressMap: baseState.progressMap,
+      revision: conflictState.serverState.revision ?? null,
       teacherNotes: baseState.teacherNotes,
       updatedAt: nextUpdatedAt,
     };
     const pendingItem = markPlanningSyncItemPending(existingQueueItem, {
+      baseRevision: conflictState.serverState.revision ?? null,
       enqueuedAt: nextUpdatedAt,
       progressMap: nextState.progressMap,
+      resolvedConflictId: conflictState.conflictId ?? null,
+      resolutionStrategy: strategy,
+      revision: conflictState.serverState.revision ?? null,
       teacherNotes: nextState.teacherNotes,
       updatedAt: nextState.updatedAt,
     });
@@ -304,9 +318,7 @@ export function usePlanningChecklist(params: {
       `Konflikt löst: ${getConflictStrategyLabel(strategy)} valdes för ${target.subjectId}/${target.areaId}.`,
     );
 
-    if (!isCurrentScope(target, currentScope)) {
-      void flushCloudQueue();
-    }
+    void flushCloudQueue();
   };
 
   const discardQueuedItem = (target: { areaId: string; subjectId: string }) => {
@@ -386,7 +398,10 @@ export function usePlanningChecklist(params: {
         try {
           const { response, responsePayload } = await postPlanningChecklistState({
             areaId: item.areaId,
+            baseRevision: item.baseRevision,
             progressMap: item.progressMap,
+            resolvedConflictId: item.resolvedConflictId,
+            resolutionStrategy: item.resolutionStrategy,
             subjectId: item.subjectId,
             teacherNotes: item.teacherNotes,
             updatedAt: item.updatedAt,
@@ -396,6 +411,7 @@ export function usePlanningChecklist(params: {
             const conflictState = buildConflictState(
               {
                 progressMap: item.progressMap,
+                revision: item.baseRevision,
                 teacherNotes: item.teacherNotes,
                 updatedAt: item.updatedAt,
               },
@@ -457,7 +473,12 @@ export function usePlanningChecklist(params: {
 
           nextQueue = removePlanningSyncItem(nextQueue, item);
 
+          if (responsePayload.state) {
+            writeStoredChecklistState(item, responsePayload.state);
+          }
+
           if (isCurrentScope(item, currentScope)) {
+            setCloudRevision(responsePayload.state?.revision ?? item.revision ?? item.baseRevision ?? null);
             setLastSyncedAt(attemptedAt);
             if (!currentQueuedConflict) {
               setCloudStatus("synced");
@@ -502,6 +523,7 @@ export function usePlanningChecklist(params: {
 
     if (!stored) {
       setProgressMap(defaults);
+      setCloudRevision(null);
       setTeacherNotes("");
       setUpdatedAt("");
       setHasHydratedLocal(true);
@@ -509,6 +531,7 @@ export function usePlanningChecklist(params: {
     }
 
     setProgressMap({ ...defaults, ...stored.progressMap });
+    setCloudRevision(stored.revision ?? null);
     setTeacherNotes(stored.teacherNotes);
     setUpdatedAt(stored.updatedAt);
     setHasHydratedLocal(true);
@@ -523,11 +546,12 @@ export function usePlanningChecklist(params: {
       storageKey,
       serializeChecklistState({
         progressMap,
+        revision: cloudRevision,
         teacherNotes,
         updatedAt: updatedAt || new Date().toISOString(),
       }),
     );
-  }, [progressMap, storageKey, teacherNotes, updatedAt]);
+  }, [cloudRevision, progressMap, storageKey, teacherNotes, updatedAt]);
 
   useEffect(() => {
     refreshQueueState();
@@ -569,6 +593,8 @@ export function usePlanningChecklist(params: {
         const payload = (await response.json()) as {
           state: {
             progressMap: ChecklistProgressMap;
+            revision?: number | null;
+            serverUpdatedAt?: string;
             teacherNotes: string;
             updatedAt: string;
           } | null;
@@ -583,6 +609,7 @@ export function usePlanningChecklist(params: {
         );
 
         if (!payload.state) {
+          setCloudRevision(null);
           setCloudStatus((current) => (current === "conflict" ? current : "synced"));
           setLastSyncedAt(new Date().toISOString());
           appendSyncLog("Cloudsync hämtning klar.");
@@ -604,6 +631,7 @@ export function usePlanningChecklist(params: {
           setUpdatedAt(payload.state.updatedAt);
         }
 
+        setCloudRevision(payload.state.revision ?? null);
         setCloudStatus((current) => (current === "conflict" ? current : "synced"));
         setLastSyncedAt(new Date().toISOString());
         appendSyncLog("Cloudsync hämtning klar.");
@@ -640,7 +668,15 @@ export function usePlanningChecklist(params: {
   }, [cloudSyncEnabled, hasHydratedLocal, syncQueueKey]);
 
   useEffect(() => {
-    if (!cloudSyncEnabled || !hasHydratedLocal || currentQueuedConflict) {
+    if (!cloudSyncEnabled || !hasHydratedLocal || typeof window === "undefined" || !hasPendingQueuedItem) {
+      return;
+    }
+
+    void flushCloudQueue();
+  }, [cloudSyncEnabled, hasHydratedLocal, hasPendingQueuedItem, syncQueueKey]);
+
+  useEffect(() => {
+    if (!cloudSyncEnabled || !hasHydratedLocal || currentQueuedItem) {
       return;
     }
 
@@ -651,6 +687,7 @@ export function usePlanningChecklist(params: {
       try {
         const { response, responsePayload } = await postPlanningChecklistState({
           areaId: area.id,
+          baseRevision: cloudRevision,
           progressMap,
           subjectId,
           teacherNotes,
@@ -661,6 +698,7 @@ export function usePlanningChecklist(params: {
           const conflictState = buildConflictState(
             {
               progressMap: { ...progressMap },
+              revision: cloudRevision,
               teacherNotes,
               updatedAt: nextUpdatedAt,
             },
@@ -671,7 +709,9 @@ export function usePlanningChecklist(params: {
             setPendingConflict(conflictState);
             enqueueSyncPayload({
               areaId: area.id,
+              baseRevision: cloudRevision,
               progressMap: conflictState.localState.progressMap,
+              revision: cloudRevision,
               subjectId,
               teacherNotes: conflictState.localState.teacherNotes,
               updatedAt: conflictState.localState.updatedAt,
@@ -683,8 +723,10 @@ export function usePlanningChecklist(params: {
                 currentQueue.find((item) => isCurrentScope(item, currentScope)) ??
                 createPlanningSyncQueueItem({
                   areaId: area.id,
+                  baseRevision: cloudRevision,
                   enqueuedAt: nextUpdatedAt,
                   progressMap: conflictState.localState.progressMap,
+                  revision: cloudRevision,
                   subjectId,
                   teacherNotes: conflictState.localState.teacherNotes,
                   updatedAt: conflictState.localState.updatedAt,
@@ -715,7 +757,9 @@ export function usePlanningChecklist(params: {
           appendSyncLog("Cloudsync sparning misslyckades.");
           enqueueSyncPayload({
             areaId: area.id,
+            baseRevision: cloudRevision,
             progressMap,
+            revision: cloudRevision,
             subjectId,
             teacherNotes,
             updatedAt: nextUpdatedAt,
@@ -733,6 +777,7 @@ export function usePlanningChecklist(params: {
         }
 
         setPendingConflict(null);
+        setCloudRevision(responsePayload.state?.revision ?? cloudRevision);
         setUpdatedAt(nextUpdatedAt);
         setCloudStatus("synced");
         setLastSyncedAt(nextUpdatedAt);
@@ -742,7 +787,9 @@ export function usePlanningChecklist(params: {
         appendSyncLog("Cloudsync sparning misslyckades.");
         enqueueSyncPayload({
           areaId: area.id,
+          baseRevision: cloudRevision,
           progressMap,
+          revision: cloudRevision,
           subjectId,
           teacherNotes,
           updatedAt: nextUpdatedAt,
@@ -754,7 +801,7 @@ export function usePlanningChecklist(params: {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [area, cloudSyncEnabled, currentQueuedConflict, hasHydratedLocal, progressMap, subjectId, teacherNotes]);
+  }, [area, cloudRevision, cloudSyncEnabled, currentQueuedItem, hasHydratedLocal, progressMap, subjectId, teacherNotes]);
 
   const gapAnalysis = useMemo(() => analyzeChecklistGap(area, progressMap), [area, progressMap]);
 

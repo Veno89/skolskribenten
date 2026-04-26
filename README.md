@@ -7,6 +7,7 @@ Current repo status:
 - the current production-readiness roadmap lives in `docs/audit.md`
 - `docs/roadmap` is the short current roadmap
 - `docs/support-operations.md` is the support triage and privacy runbook
+- `docs/planning-sync-operations.md` is the planning sync conflict and drift runbook
 - `docs/design` is now only a historical archive pointer, not implementation truth
 
 ## Core Promise
@@ -92,6 +93,7 @@ Protected dashboard routes:
 - `/installningar`
 - `/konto`
 - `/admin/support` for server-gated support admins
+- `/admin/planning-sync` for server-gated planning sync diagnostics
 
 Main API routes:
 - `/api/ai`
@@ -174,7 +176,7 @@ The support retention command defaults to a dry run and only soft-deletes resolv
 Supabase migrations live in `supabase/migrations/`.
 
 The current local migration set runs through:
-- `016_support_admin_operations.sql`
+- `017_revisioned_planning_sync.sql`
 
 The live app expects at least:
 - `profiles`
@@ -182,8 +184,10 @@ The live app expects at least:
 - `planning_checklists`
 - `support_requests`
 - `app_admins`
+- `planning_sync_conflicts`
 - RLS policies
 - the generation-attempt quota functions
+- the revisioned planning-sync RPC
 - the monthly reset / entitlement maintenance SQL jobs
 - the Stripe billing projection tables and RPCs documented in `docs/billing-security.md`
 
@@ -201,7 +205,7 @@ Implemented now:
 
 Known deliberate limitations:
 - the product is not yet production-ready; use `docs/audit.md` for the current gap list and phased plan
-- planning sync is best-effort, not collaboration-grade versioned sync
+- planning sync is revisioned backup/sync, not collaboration-grade real-time editing
 - some launch-signoff work still depends on manual or live-environment verification
 
 ## Repository

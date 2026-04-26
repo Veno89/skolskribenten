@@ -9,12 +9,13 @@ import { cn } from "@/lib/utils";
 import type { Profile } from "@/types";
 
 interface Props {
-  isSupportAdmin?: boolean;
+  isAppAdmin?: boolean;
   profile: Profile;
 }
 
-export function DashboardNav({ isSupportAdmin = false, profile }: Props): JSX.Element {
+export function DashboardNav({ isAppAdmin = false, profile }: Props): JSX.Element {
   const pathname = usePathname();
+  const isAdminPath = pathname.startsWith("/admin");
 
   return (
     <nav className="flex flex-wrap items-center gap-3 py-4 px-6 mb-4 border-b">
@@ -58,7 +59,7 @@ export function DashboardNav({ isSupportAdmin = false, profile }: Props): JSX.El
           >
             <Link href="/konto">Konto</Link>
           </Button>
-          {isSupportAdmin ? (
+          {isAppAdmin ? (
             <Button
               asChild
               variant={pathname === "/admin/support" ? "default" : "outline"}
@@ -66,6 +67,16 @@ export function DashboardNav({ isSupportAdmin = false, profile }: Props): JSX.El
               className="rounded-full"
             >
               <Link href="/admin/support">Support</Link>
+            </Button>
+          ) : null}
+          {isAppAdmin ? (
+            <Button
+              asChild
+              variant={isAdminPath && pathname !== "/admin/support" ? "default" : "outline"}
+              size="sm"
+              className="rounded-full"
+            >
+              <Link href="/admin/planning-sync">Sync</Link>
             </Button>
           ) : null}
         </div>

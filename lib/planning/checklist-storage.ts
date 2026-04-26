@@ -3,6 +3,7 @@ import type { PlanningSubjectId } from "@/lib/planning/curriculum";
 
 interface StoredChecklistState {
   progressMap: ChecklistProgressMap;
+  revision?: number | null;
   teacherNotes: string;
   updatedAt: string;
 }
@@ -49,6 +50,10 @@ export function parseStoredChecklist(value: string | null): StoredChecklistState
         ? parsed.state.teacherNotes.slice(0, MAX_PLANNING_TEACHER_NOTES_LENGTH)
         : "";
     const updatedAt = typeof parsed.state.updatedAt === "string" ? parsed.state.updatedAt : "";
+    const revision =
+      typeof parsed.state.revision === "number" && Number.isInteger(parsed.state.revision)
+        ? parsed.state.revision
+        : null;
     const progressMap =
       parsed.state.progressMap && typeof parsed.state.progressMap === "object"
         ? (parsed.state.progressMap as ChecklistProgressMap)
@@ -56,6 +61,7 @@ export function parseStoredChecklist(value: string | null): StoredChecklistState
 
     return {
       progressMap,
+      revision,
       teacherNotes,
       updatedAt,
     };
@@ -132,6 +138,10 @@ export function parsePlanningExportPayload(rawValue: string): PlanningExportPayl
             entry.state && typeof entry.state.progressMap === "object"
               ? (entry.state.progressMap as ChecklistProgressMap)
               : {},
+          revision:
+            entry.state && typeof entry.state.revision === "number" && Number.isInteger(entry.state.revision)
+              ? entry.state.revision
+              : null,
           teacherNotes:
             entry.state && typeof entry.state.teacherNotes === "string"
               ? entry.state.teacherNotes.slice(0, MAX_PLANNING_TEACHER_NOTES_LENGTH)
