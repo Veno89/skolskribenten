@@ -12,6 +12,7 @@
     "test": "vitest run",
     "billing:reconcile": "node scripts/reconcile-stripe.mjs",
     "billing:reconcile:repair": "node scripts/reconcile-stripe.mjs --repair",
+    "ai:smoke": "node scripts/ai-smoke.mjs",
     "support:retention": "node scripts/retention-support.mjs",
     "support:retention:repair": "node scripts/retention-support.mjs --repair"
   },

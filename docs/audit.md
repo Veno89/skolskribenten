@@ -72,12 +72,33 @@ Phase D implementation update:
 - `lib/ai/governance.ts`, `lib/ai/output-guard.ts`, and `lib/ai/eval-fixtures.ts` provide versioned AI metadata, a centralized post-generation output guard, and synthetic regression fixtures.
 - The drafting client now surfaces non-blocking output-guard warnings beside the generated document.
 - `docs/ai-governance.md` documents the AI request state model, usage metadata contract, guard policy, eval baseline, change process, and residual risks.
+- Follow-up completion on April 27, 2026 adds provider timeout/error classification, `pnpm ai:smoke` with synthetic scrubbed input, and `/admin/ai-governance` for guard/version diagnostics without raw content.
+
+Phase E implementation update:
+- `supabase/migrations/019_account_lifecycle_security.sql` adds `account_deletion_requests` for admin-handled deletion workflows.
+- Settings now supports confirmed email change, authenticated account JSON export, local data clearing, and account deletion requests.
+- `/api/account/export` returns the authenticated user's profile, planning, support, usage, account-deletion, and billing projection data without caching.
+- `/admin/account-requests` gives server-gated visibility into deletion/data-rights requests.
+- Registration no longer returns a specific already-registered error, reducing account enumeration.
+- Middleware now protects `/admin`, adds `frame-ancestors 'none'`, emits CSP report-only headers to `/api/csp-report`, and sets HSTS in production.
+- `docs/account-security-operations.md` documents account export, deletion request handling, and CSP rollout.
 
 Phase D local verification on April 26, 2026:
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test` (31 test files, 181 tests)
 - `pnpm build`
+- `git diff --check`
+
+Result:
+- all checks passed locally
+
+Phase D/E completion verification on April 27, 2026:
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm test` (34 test files, 188 tests)
+- `pnpm build`
+- `node --check scripts/ai-smoke.mjs`
 - `git diff --check`
 
 Result:
@@ -145,7 +166,7 @@ Fix direction:
 Severity: Medium
 
 Why it matters:
-The AI route is much safer than a pass-through endpoint, and Phase D removes the biggest blind spot by validating generated output before it reaches the browser. Production quality for a school documentation assistant still depends on broader red-team coverage, live provider smoke tests, timeout/error classification, and operational visibility into guard failures.
+The AI route is much safer than a pass-through endpoint, and Phase D removes the biggest blind spot by validating generated output before it reaches the browser. The remaining risk is release discipline and breadth: broader red-team coverage, smoke automation, alerting on guard failures, and teacher feedback/reporting loops.
 
 Evidence:
 - `app/api/ai/route.ts` re-scrubs input and blocks likely sensitive content before calling Anthropic.
@@ -153,48 +174,54 @@ Evidence:
 - Blocked generated output releases the reserved transform and records `output_guard_passed = false` without storing raw prompt or output text.
 - `lib/ai/prompts.ts` contains strong instructions, and `lib/ai/governance.ts` now versions provider/model, prompt, and output guard metadata on usage events.
 - `lib/ai/eval-fixtures.ts` and focused tests cover the first synthetic red-team cases, placeholder preservation, warning headers, and blocked-output behavior.
-- `lib/ai/provider.ts` hardcodes the primary model. There is no deployed smoke check proving the configured model remains available in each environment.
+- `app/api/ai/route.ts` now classifies provider timeout/rate-limit/provider errors and releases reserved quota on provider failure.
+- `/admin/ai-governance` exposes guard/version diagnostics without raw content.
+- `pnpm ai:smoke` provides a live synthetic provider smoke path, but it is not yet wired into release automation.
 
 Fix direction:
 - Expand the offline eval suite with more names, personnummer, mixed Swedish names, incident reports, planning notes, and unsupported factual-addition cases.
-- Add admin/debug visibility for output-guard pass/fail rates by prompt/model/guard version.
-- Add provider timeout/abort handling and cost/error classification.
-- Add a live AI smoke test to the release checklist using synthetic scrubbed content only.
+- Wire `pnpm ai:smoke` into staging/release automation with synthetic scrubbed content only.
+- Add alerting for output-guard failure spikes and provider-error spikes.
+- Add teacher feedback/report-without-content workflow.
 
-#### 5. Account lifecycle and user data rights are still incomplete outside billing
-Severity: Medium-High
-
-Why it matters:
-The basic auth flows work, but a teacher-facing product needs predictable account recovery, data export/deletion, session visibility, and email-change handling. These are not luxuries once the app stores account metadata, planning state, support requests, billing identifiers, and usage metadata.
-
-Evidence:
-- `app/(auth)/actions.ts` has login, registration, confirmation resend, password reset, password update, and sign-out flows.
-- `components/dashboard/settings/SettingsPageContent.tsx` only updates name, school, school level, and tone.
-- There is no self-service email change flow, account deletion flow, profile export, planning export from the server, support request deletion request workflow, MFA setting, or session/device list.
-- Registration still returns a specific "already registered" message, which is helpful UX but allows account existence probing.
-
-Fix direction:
-- Add self-service account deletion and data export runbooks before broad launch.
-- Add email-change flow or explicitly document that support must handle it.
-- Decide whether account enumeration in registration is acceptable; if not, make signup responses less specific.
-- Add app-level throttling around auth-related server actions if Supabase platform limits are not enough for the intended launch.
-- Track live Supabase security settings, including leaked-password protection availability, as part of release sign-off.
-
-#### 6. Security headers are good baseline, not hardened final state
+#### 5. Account lifecycle and user data rights have a baseline, but deletion still needs policy decisions
 Severity: Medium
 
 Why it matters:
-Middleware applies useful baseline headers, but the production CSP still allows inline scripts/styles and has no reporting loop. This is common in early Next.js apps, but it is not the posture to stop at for a privacy-sensitive app.
+The basic auth flows work, and Phase E adds the missing baseline for email change, data export, and deletion requests. The remaining risk is policy and operations: when deletion can be automated, what must be retained for billing/support/legal reasons, and whether session/device visibility or MFA is needed before broad launch.
+
+Evidence:
+- `app/(auth)/actions.ts` has login, registration, confirmation resend, password reset, password update, and sign-out flows.
+- `components/dashboard/settings/SettingsPageContent.tsx` now exposes profile settings, email change, account JSON export, local-data clearing, and account deletion request.
+- `/api/account/export` returns the authenticated user's own profile, planning, support, usage, deletion request, and billing projection data.
+- `supabase/migrations/019_account_lifecycle_security.sql` adds `account_deletion_requests`.
+- `/admin/account-requests` provides server-gated visibility for deletion/data-rights requests.
+- Registration no longer returns a specific "already registered" message.
+- There is still no true session/device list or MFA setting.
+
+Fix direction:
+- Decide whether deletion can be automated for accounts without active billing or retention blockers.
+- Add admin actions/runbook steps for completing, rejecting, or cancelling deletion requests.
+- Add app-level throttling around auth-related server actions if Supabase platform limits are not enough for the intended launch.
+- Decide whether session/device visibility or MFA is needed before broad launch.
+- Track live Supabase security settings, including leaked-password protection availability, as part of release sign-off.
+
+#### 6. Security headers now have report-only telemetry, but nonce/hash CSP is still future work
+Severity: Medium
+
+Why it matters:
+Middleware applies useful baseline headers and now has a report-only loop, but the production CSP still allows inline scripts/styles. This is common in early Next.js apps, but it is not the posture to stop at for a privacy-sensitive app.
 
 Evidence:
 - `lib/supabase/middleware.ts` sets `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, and CSP.
 - Production `script-src` still includes `'unsafe-inline'`; `style-src` includes `'unsafe-inline'`.
-- There is no `Content-Security-Policy-Report-Only`, report endpoint, `frame-ancestors`, `upgrade-insecure-requests`, or repo-visible HSTS policy.
+- CSP now includes `frame-ancestors 'none'`.
+- `Content-Security-Policy-Report-Only` points at `/api/csp-report`.
+- Production middleware now sets HSTS.
 
 Fix direction:
-- Add CSP report-only mode first, then move toward nonce/hash-based scripts if feasible.
-- Add `frame-ancestors 'none'` to CSP in addition to `X-Frame-Options`.
-- Decide whether HSTS is set at the hosting edge. If not, add it in middleware for production.
+- Use CSP reports from staging/production to identify required script/style changes.
+- Move toward nonce/hash-based scripts if feasible.
 - Add tests that assert the intended production CSP shape.
 
 #### 7. Operational visibility is improving, but still not full incident readiness
@@ -216,10 +243,10 @@ Fix direction:
 
 ### Missing Capabilities For This App Category
 - Privacy controls: local autosave setting, deeper planning cloud-sync storage policy, export/delete account data, support-message deletion request flow. A clear-all local data path now exists.
-- AI governance: prompt/model/output-guard versioning, a first synthetic eval baseline, post-generation blocking, and output warnings now exist. Remaining work is broader red-team coverage, admin/debug guard metrics, teacher feedback/rating, and issue-report-without-content workflow.
+- AI governance: prompt/model/output-guard versioning, a first synthetic eval baseline, post-generation blocking, output warnings, provider-error classification, synthetic smoke, and admin guard metrics now exist. Remaining work is broader red-team coverage, alerting, teacher feedback/rating, and issue-report-without-content workflow.
 - Support operations: deployed notification validation, scheduled retention automation, abuse dashboard, and broader incident runbooks. A minimal admin queue, status/owner fields, redaction/deletion actions, sanitized notifications, retention tooling, and support PII runbook now exist.
 - Planning reliability: revisioned sync, server-owned timestamps, deterministic conflict handling, conflict audit history, import/export guardrails, and admin conflict visibility. Remaining work is alerting, browser-flow coverage, and a final teacher-notes cloud policy.
-- Account management: email change, account deletion, data export, session/device visibility, optional MFA/security settings.
+- Account management: email change, account export, and deletion-request intake now exist. Remaining work is deletion completion policy, session/device visibility, optional MFA/security settings, and live auth-security sign-off.
 - Release confidence: staging smoke tests, production smoke tests, accessibility record, live AI provider smoke, uptime/error monitoring.
 
 ### Non-Billing Phased Plan Of Attack
@@ -238,17 +265,12 @@ Phase C: Planning sync reliability
 - Remaining: browser-flow coverage for offline/online resolution, deployed migration verification, alerting for conflict spikes, and a final policy decision on synced teacher notes.
 
 Phase D: AI quality and safety
-- Implemented baseline: prompt/model/output-guard version fields in usage events, centralized post-generation output guard, blocked-output quota release, teacher-visible warning headers, and synthetic eval fixtures/tests.
-- Remaining: broaden the golden/red-team suite for Swedish school documentation, add provider timeout/cancel/error classification, add live release smoke tests with synthetic scrubbed input, and build admin/debug guard metrics.
+- Implemented baseline: prompt/model/output-guard version fields in usage events, centralized post-generation output guard, blocked-output quota release, teacher-visible warning headers, synthetic eval fixtures/tests, provider timeout/error classification, synthetic AI smoke script, and admin guard/version diagnostics.
+- Remaining: broaden the golden/red-team suite for Swedish school documentation, wire smoke tests into release automation, add alerting for guard failure spikes, and add teacher feedback/report-without-content workflow.
 
 Phase E: Account lifecycle and security hardening
-- Add email change, data export, account deletion, and session/security settings.
-- Decide on account enumeration tradeoffs in registration.
-- Tighten CSP in report-only mode, then move toward an enforced nonce/hash policy where feasible.
-- Complete manual accessibility and auth-security sign-off.
-
-Phase F: Product expansion only after reliability
-- Expand curriculum coverage, OCR/handwritten-note ideas, and new templates after the data lifecycle, support, sync, and AI governance foundations are stable.
+- Implemented baseline: confirmed email change, authenticated account JSON export, admin-tracked deletion requests, account-request admin visibility, less specific registration duplicate handling, admin middleware protection, CSP report-only endpoint, `frame-ancestors 'none'`, and production HSTS.
+- Remaining: decide whether deletion can be automated for accounts without billing/retention blockers, add session/device visibility or MFA if needed, add app-level auth throttling if Supabase controls are insufficient, move CSP toward nonce/hash enforcement, and complete manual accessibility/live auth-security sign-off.
 
 Non-billing Phase A/B implementation verification on April 26, 2026:
 - `pnpm typecheck`

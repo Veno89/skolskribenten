@@ -74,10 +74,6 @@ function toFriendlyAuthError(message: string): string {
     return "Bekräfta din e-postadress innan du loggar in.";
   }
 
-  if (normalized.includes("user already registered")) {
-    return "Det finns redan ett konto med den här e-postadressen.";
-  }
-
   if (normalized.includes("password")) {
     return PASSWORD_REQUIREMENTS_MESSAGE;
   }
@@ -159,6 +155,13 @@ export async function registerAction(formData: FormData): Promise<never> {
   });
 
   if (error) {
+    if (error.message.toLowerCase().includes("user already registered")) {
+      redirectWithMessage("/logga-in", {
+        success: "Om adressen kan användas har vi skickat instruktioner. Annars kan du logga in eller återställa lösenordet.",
+        next,
+      });
+    }
+
     redirectWithMessage("/registrera", { error: toFriendlyAuthError(error.message), next });
   }
 

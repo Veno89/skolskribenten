@@ -347,4 +347,52 @@ describe("/api/ai", () => {
       }),
     );
   });
+
+  it("classifies provider timeouts and releases the reserved transform", async () => {
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === "begin_generation_attempt") {
+        return {
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: buildAttemptResult({
+              reserved_transform: true,
+            }),
+            error: null,
+          }),
+        };
+      }
+
+      return { error: null };
+    });
+    mockAnthropicStream.mockRejectedValue(
+      Object.assign(new Error("Request timed out"), {
+        name: "TimeoutError",
+      }),
+    );
+
+    const { POST } = await import("@/app/api/ai/route");
+    const response = await POST(
+      new Request("http://localhost/api/ai", {
+        method: "POST",
+        body: JSON.stringify({
+          templateType: "larlogg",
+          scrubbedInput: "Det hÃ¤r Ã¤r ett tillrÃ¤ckligt lÃ¥ngt och redan scrubbat underlag.",
+          scrubberStats: {
+            namesReplaced: 1,
+            piiTokensReplaced: 0,
+          },
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: "AI_PROVIDER_TIMEOUT",
+      }),
+    );
+    expect(mockRpc).toHaveBeenCalledWith("release_generation_attempt", {
+      p_user_id: "user-123",
+    });
+    expect(mockUsageInsert).not.toHaveBeenCalled();
+  });
 });

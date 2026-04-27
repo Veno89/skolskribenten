@@ -47,6 +47,10 @@ describe("updateSession", () => {
       "https://example.com/logga-in?next=%2Fskrivstation%3Ftab%3Dutkast",
     );
     expect(response.headers.get("x-frame-options")).toBe("DENY");
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(response.headers.get("content-security-policy-report-only")).toContain(
+      "report-uri /api/csp-report",
+    );
   });
 
   it("redirects authenticated users away from auth routes", async () => {
@@ -66,6 +70,16 @@ describe("updateSession", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://example.com/konto");
     expect(response.headers.get("content-security-policy")).toContain("default-src 'self'");
+  });
+
+  it("treats admin pages as protected routes", async () => {
+    const { updateSession } = await import("@/lib/supabase/middleware");
+    const response = await updateSession(new NextRequest("https://example.com/admin/ai-governance"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://example.com/logga-in?next=%2Fadmin%2Fai-governance",
+    );
   });
 
   it("allows public routes through while still applying security headers", async () => {

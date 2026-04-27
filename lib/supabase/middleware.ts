@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { buildPath, sanitizeNextPath } from "@/lib/auth/redirects";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/config";
 
-const PROTECTED_ROUTES = ["/skrivstation", "/lektionsplanering", "/installningar", "/konto"] as const;
+const PROTECTED_ROUTES = ["/skrivstation", "/lektionsplanering", "/installningar", "/konto", "/admin"] as const;
 const AUTH_ROUTES = ["/logga-in", "/registrera"] as const;
 
 function applySecurityHeaders(response: NextResponse): NextResponse {
@@ -16,15 +16,22 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
     : "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.stripe.com;";
   const assetSrc = "img-src 'self' data: blob:; font-src 'self' data:;";
   const objectSrc = isDevelopment ? "object-src 'self' data:;" : "object-src 'none';";
+  const upgradeInsecureRequests = isDevelopment ? "" : "upgrade-insecure-requests;";
+  const enforcedCsp = `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; ${scriptSrc} style-src 'self' 'unsafe-inline'; ${assetSrc} ${objectSrc} ${connectSrc} ${upgradeInsecureRequests}`.trim();
 
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("Content-Security-Policy", enforcedCsp);
   response.headers.set(
-    "Content-Security-Policy",
-    `default-src 'self'; base-uri 'self'; form-action 'self'; ${scriptSrc} style-src 'self' 'unsafe-inline'; ${assetSrc} ${objectSrc} ${connectSrc}`,
+    "Content-Security-Policy-Report-Only",
+    `${enforcedCsp} report-uri /api/csp-report;`,
   );
+
+  if (!isDevelopment) {
+    response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  }
 
   return response;
 }

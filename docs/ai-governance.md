@@ -1,6 +1,6 @@
 # AI Governance Operations
 
-Last updated: April 26, 2026.
+Last updated: April 27, 2026.
 
 This document describes the current AI generation control plane. It is an operational contract, not a guarantee that the model can never produce bad text.
 
@@ -10,7 +10,7 @@ This document describes the current AI generation control plane. It is an operat
 2. Server scrubber runs again on the submitted text.
 3. Server sensitive-content guard rejects obvious remaining personal data before generation.
 4. Quota/rate-limit reservation is created through the generation-attempt RPC.
-5. Anthropic generation runs with the server-owned prompt and model configuration.
+5. Anthropic generation runs with the server-owned prompt/model configuration and a server timeout.
 6. The server assembles the generated text and runs the output guard before returning it.
 7. If the output guard blocks, the reserved transform is released, a non-content usage event is recorded, and no generated text is returned.
 8. If the output guard passes, a non-content usage event is recorded and the text is returned with optional warning headers.
@@ -59,6 +59,22 @@ Current coverage proves:
 - obvious personal data in generated output blocks response delivery
 - non-blocking warnings reach the browser and usage metadata
 - blocked output releases the reserved transform
+- provider timeout classification returns a safe error without spending the reserved transform
+
+## Operations
+
+Admin diagnostics:
+- `/admin/ai-governance` shows recent non-content usage events, pass/block counts, warning counts, and prompt/model/output-guard version groupings.
+- The page is gated through the server-side `app_admins` allowlist.
+- It must not display raw prompts, scrubbed inputs, or generated outputs.
+
+Live smoke:
+
+```bash
+pnpm ai:smoke
+```
+
+The smoke script sends only synthetic scrubbed input, requires `ANTHROPIC_API_KEY`, preserves `[Elev 1]`, and logs only model/output-length metadata.
 
 ## Prompt Or Guard Changes
 
@@ -73,6 +89,6 @@ When changing prompt behavior or guard rules:
 
 - The eval baseline is synthetic and small; it is a regression tripwire, not a comprehensive safety proof.
 - The output guard can produce false positives and false negatives.
-- There is not yet a live provider smoke test in the release workflow.
-- Provider timeout/cancel/error classification is still a follow-up item.
+- The live provider smoke test still needs to be wired into the release workflow.
+- Provider timeout/cancel/error classification is route-level and should be expanded into dashboards/alerts if provider incidents become frequent.
 - Teacher review remains required before copying or sending generated text.

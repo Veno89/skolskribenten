@@ -1,11 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { getAiGovernanceMetadata } from "@/lib/ai/governance";
+import {
+  AI_GENERATION_TIMEOUT_MS,
+  getAiGovernanceMetadata,
+} from "@/lib/ai/governance";
 import {
   serializeOutputGuardWarnings,
   validateAiOutput,
 } from "@/lib/ai/output-guard";
+import { classifyAiProviderError } from "@/lib/ai/provider-errors";
 import { CLAUDE_PRIMARY_MODEL, TEMPLATE_TYPES, type TemplateType } from "@/lib/ai/provider";
 import { getSystemPrompt } from "@/lib/ai/prompts";
 import {
@@ -415,17 +419,22 @@ export async function POST(req: NextRequest): Promise<Response> {
   let generatedText = "";
 
   try {
-    const claudeStream = await anthropic.messages.stream({
+    const claudeStream = await anthropic.messages.stream(
+      {
       model: CLAUDE_PRIMARY_MODEL,
       max_tokens: 2048,
       system: systemPrompt,
       messages: [
         {
           role: "user",
-              content: `Här är lärarens anteckningar (all personinformation är borttagen av GDPR-skölden):\n\n${effectiveScrubbedInput}`,
+          content: `Här är lärarens anteckningar (all personinformation är borttagen av GDPR-skölden):\n\n${effectiveScrubbedInput}`,
         },
       ],
-    });
+      },
+      {
+        signal: AbortSignal.timeout(AI_GENERATION_TIMEOUT_MS),
+      },
+    );
 
     for await (const chunk of claudeStream) {
       if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
@@ -437,10 +446,18 @@ export async function POST(req: NextRequest): Promise<Response> {
       await releaseGenerationAttempt(adminSupabase, user.id, context);
     }
 
-    logRouteError(context, "Generation failed.", error);
+    const classifiedError = classifyAiProviderError(error);
+    logRouteError(context, "AI provider generation failed.", error, {
+      aiErrorCode: classifiedError.code,
+      aiErrorStatus: classifiedError.status,
+      timeoutMs: AI_GENERATION_TIMEOUT_MS,
+    });
     return jsonWithContext(
-          { error: "Genereringen misslyckades. Försök igen om en stund." },
-      { status: 502 },
+      {
+        error: classifiedError.userMessage,
+        code: classifiedError.code,
+      },
+      { status: classifiedError.status },
       context,
     );
   }

@@ -1,4 +1,8 @@
-import { updateSettingsAction } from "@/app/(dashboard)/installningar/actions";
+import {
+  requestAccountDeletionAction,
+  updateEmailAction,
+  updateSettingsAction,
+} from "@/app/(dashboard)/installningar/actions";
 import { AuthNotice } from "@/components/auth/AuthNotice";
 import { AuthSubmitButton } from "@/components/auth/AuthSubmitButton";
 import { ClearLocalDataButton } from "@/components/dashboard/settings/ClearLocalDataButton";
@@ -275,6 +279,81 @@ export function SettingsPageContent(props: SettingsPageContentProps): JSX.Elemen
                 planeringsanteckningar och supportmeddelanden raderas inte av den här knappen.
               </p>
               <ClearLocalDataButton />
+            </div>
+          </section>
+
+          <section className="ss-card p-8">
+            <p className="text-sm uppercase tracking-[0.26em] text-[var(--ss-primary)]">
+              Konto och rättigheter
+            </p>
+            <div className="mt-5 space-y-5 text-sm leading-7 text-[var(--ss-neutral-800)]">
+              <form action={updateEmailAction} className="space-y-3">
+                <label htmlFor="email" className="block font-medium text-[var(--ss-neutral-900)]">
+                  Byt e-postadress
+                </label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  defaultValue={userEmail ?? profile.email}
+                  autoComplete="email"
+                  className="h-12 rounded-2xl bg-[var(--ss-neutral-50)]"
+                />
+                <AuthSubmitButton
+                  type="submit"
+                  idleLabel="Skicka bekräftelselänk"
+                  pendingLabel="Skickar..."
+                  className="h-11 rounded-full px-5"
+                />
+              </form>
+
+              <div className="rounded-[1.5rem] border border-[var(--ss-neutral-100)] bg-[var(--ss-neutral-50)] p-5">
+                <p className="font-medium text-[var(--ss-neutral-900)]">Exportera kontodata</p>
+                <p className="mt-2">
+                  Exporten innehåller profil, användningsmetadata, betalningsprojektioner,
+                  supportärenden och molnsynkad planering för ditt konto.
+                </p>
+                <a
+                  href="/api/account/export"
+                  className="mt-4 inline-flex rounded-full border border-[var(--ss-neutral-200)] bg-white px-5 py-2 font-medium text-[var(--ss-neutral-900)] hover:bg-[var(--ss-neutral-50)]"
+                >
+                  Ladda ner JSON-export
+                </a>
+              </div>
+
+              <form
+                action={requestAccountDeletionAction}
+                className="space-y-3 rounded-[1.5rem] border border-red-200 bg-red-50 p-5 text-red-900"
+              >
+                <p className="font-medium">Begär kontoradering</p>
+                <p>
+                  Detta skapar en adminhanterad begäran så att betalning, supporthistorik och
+                  lagringskrav kan kontrolleras innan kontot tas bort.
+                </p>
+                <label htmlFor="deleteReason" className="block text-sm font-medium">
+                  Kommentar, valfritt
+                </label>
+                <textarea
+                  id="deleteReason"
+                  name="reason"
+                  maxLength={1000}
+                  className="min-h-24 w-full rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm text-[var(--ss-neutral-900)]"
+                />
+                <label htmlFor="deleteConfirmation" className="block text-sm font-medium">
+                  Skriv RADERA för att bekräfta
+                </label>
+                <Input
+                  id="deleteConfirmation"
+                  name="confirmation"
+                  className="h-12 rounded-2xl bg-white"
+                />
+                <AuthSubmitButton
+                  type="submit"
+                  idleLabel="Begär kontoradering"
+                  pendingLabel="Registrerar..."
+                  className="h-11 rounded-full bg-red-700 px-5 text-white hover:bg-red-800"
+                />
+              </form>
             </div>
           </section>
         </aside>

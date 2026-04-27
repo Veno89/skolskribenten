@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 26, 2026.
+Last updated: April 27, 2026.
 
 This roadmap tracks current product and security priorities. `docs/audit.md` is still the detailed source of truth; this file is the short operational map.
 
@@ -27,16 +27,10 @@ This roadmap tracks current product and security priorities. `docs/audit.md` is 
 - Landed baseline: `usage_events` now records AI provider/model, prompt version, output-guard version, guard pass/fail state, and non-content warning labels.
 - Landed guardrail: `/api/ai` assembles generated text server-side, blocks obvious reintroduced identifiers or new person placeholders before returning output, and releases reserved quota on blocked output.
 - Landed eval support: synthetic fixtures and tests cover prompt clauses, placeholder preservation, guard blocking, warning headers, and blocked-output usage metadata.
-- Remaining: expand the golden/red-team suite, add provider timeout/cancel classification, add live AI smoke tests with synthetic scrubbed input, and create admin/debug visibility for guard failures and warning rates.
+- Landed operations support: provider timeout/error classification, synthetic `pnpm ai:smoke`, and `/admin/ai-governance` for guard/version diagnostics without raw content.
+- Remaining: expand the golden/red-team suite, wire the smoke test into release automation, add alerting for guard failure spikes, and add teacher feedback/report-without-content workflow.
 
 ## Phase E: Account And Security Maturity
-- Add email change, account deletion, data export, and session/security settings.
-- Decide whether registration should hide account-existence signals.
-- Add app-level auth throttling if Supabase platform controls are not sufficient.
-- Harden CSP through report-only rollout, then nonce/hash enforcement where feasible.
-- Complete manual accessibility and live auth-security sign-off.
-
-## Phase F: Product Expansion
-- Expand curriculum coverage and planning depth only after privacy, support, sync, and AI governance work lands.
-- Revisit OCR/handwritten-note import after the privacy and evaluation harness exists.
-- Add new templates based on real support/feedback patterns, not speculative scope.
+- Landed baseline: confirmed email-change flow, authenticated account JSON export, admin-tracked account deletion requests, and `/admin/account-requests`.
+- Landed security hardening: registration no longer returns the specific "already registered" message, `/admin` is middleware-protected, CSP now includes `frame-ancestors 'none'`, CSP report-only posts to `/api/csp-report`, and HSTS is set in production.
+- Remaining: decide whether deletion can be automated for accounts without billing/retention blockers, add true session/device visibility or MFA if needed, add app-level auth throttling if Supabase controls are insufficient, move CSP toward nonce/hash enforcement, and complete manual accessibility/live auth-security sign-off.

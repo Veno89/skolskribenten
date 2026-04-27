@@ -9,6 +9,7 @@ Current repo status:
 - `docs/support-operations.md` is the support triage and privacy runbook
 - `docs/planning-sync-operations.md` is the planning sync conflict and drift runbook
 - `docs/ai-governance.md` is the AI prompt, output-guard, and eval operations note
+- account export, email change, and deletion requests live in Settings and the admin account queue
 - `docs/design` is now only a historical archive pointer, not implementation truth
 
 ## Core Promise
@@ -95,9 +96,13 @@ Protected dashboard routes:
 - `/konto`
 - `/admin/support` for server-gated support admins
 - `/admin/planning-sync` for server-gated planning sync diagnostics
+- `/admin/ai-governance` for server-gated AI guard/version diagnostics
+- `/admin/account-requests` for server-gated account deletion/data-rights visibility
 
 Main API routes:
+- `/api/account/export`
 - `/api/ai`
+- `/api/csp-report`
 - `/api/planning/checklist`
 - `/api/support`
 - `/api/stripe/checkout`
@@ -156,6 +161,12 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
+AI smoke test with synthetic scrubbed input:
+
+```bash
+pnpm ai:smoke
+```
+
 Billing reconciliation:
 
 ```bash
@@ -177,7 +188,7 @@ The support retention command defaults to a dry run and only soft-deletes resolv
 Supabase migrations live in `supabase/migrations/`.
 
 The current local migration set runs through:
-- `018_ai_governance_metadata.sql`
+- `019_account_lifecycle_security.sql`
 
 The live app expects at least:
 - `profiles`
@@ -186,6 +197,7 @@ The live app expects at least:
 - `support_requests`
 - `app_admins`
 - `planning_sync_conflicts`
+- `account_deletion_requests`
 - AI governance metadata columns on `usage_events`
 - RLS policies
 - the generation-attempt quota functions
@@ -200,6 +212,7 @@ Implemented now:
 - drafting station with GDPR scrubber, rendered output, and local draft recovery
 - planning workspace with checklist state, cloud sync, conflict handling, import/export, and direct AI generation
 - AI generation with server-side sensitive-content checks, output guard, prompt/model metadata, and synthetic eval coverage
+- account email change, JSON account export, and admin-tracked account deletion requests
 - recurring and one-time billing flows
 - recurring billing portal access
 - server-side support intake

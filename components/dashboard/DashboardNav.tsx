@@ -15,7 +15,6 @@ interface Props {
 
 export function DashboardNav({ isAppAdmin = false, profile }: Props): JSX.Element {
   const pathname = usePathname();
-  const isAdminPath = pathname.startsWith("/admin");
 
   return (
     <nav className="flex flex-wrap items-center gap-3 py-4 px-6 mb-4 border-b">
@@ -72,11 +71,31 @@ export function DashboardNav({ isAppAdmin = false, profile }: Props): JSX.Elemen
           {isAppAdmin ? (
             <Button
               asChild
-              variant={isAdminPath && pathname !== "/admin/support" ? "default" : "outline"}
+              variant={pathname === "/admin/planning-sync" ? "default" : "outline"}
               size="sm"
               className="rounded-full"
             >
               <Link href="/admin/planning-sync">Sync</Link>
+            </Button>
+          ) : null}
+          {isAppAdmin ? (
+            <Button
+              asChild
+              variant={pathname === "/admin/ai-governance" ? "default" : "outline"}
+              size="sm"
+              className="rounded-full"
+            >
+              <Link href="/admin/ai-governance">AI</Link>
+            </Button>
+          ) : null}
+          {isAppAdmin ? (
+            <Button
+              asChild
+              variant={pathname === "/admin/account-requests" ? "default" : "outline"}
+              size="sm"
+              className="rounded-full"
+            >
+              <Link href="/admin/account-requests">Konton</Link>
             </Button>
           ) : null}
         </div>

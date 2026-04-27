@@ -44,6 +44,54 @@ export interface Database {
           },
         ];
       };
+      account_deletion_requests: {
+        Row: {
+          handled_at: string | null;
+          handled_by: string | null;
+          id: string;
+          reason: string | null;
+          requested_at: string;
+          status: "approved" | "cancelled" | "completed" | "rejected" | "requested";
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          reason?: string | null;
+          requested_at?: string;
+          status?: "approved" | "cancelled" | "completed" | "rejected" | "requested";
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          reason?: string | null;
+          requested_at?: string;
+          status?: "approved" | "cancelled" | "completed" | "rejected" | "requested";
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_handled_by_fkey";
+            columns: ["handled_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_deletion_requests_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           api_call_count: number;

@@ -10,6 +10,7 @@ Use these sources instead:
 - `docs/audit.md` for current production-readiness status, risks, and phased implementation plan.
 - `docs/billing-security.md` for the account, Stripe, and entitlement operating contract.
 - `docs/ai-governance.md` for the AI prompt, output-guard, and eval operating contract.
+- `docs/account-security-operations.md` for account export, email change, deletion requests, and CSP rollout.
 - `docs/roadmap` for the short current roadmap.
 - `README.md` for setup, route, environment, and migration notes.
 - The live code and migrations for exact behavior.
