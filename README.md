@@ -5,12 +5,11 @@ Skolskribenten is a Next.js web app for Swedish teachers who need to turn raw cl
 Current repo status:
 - advanced MVP / controlled-pilot stage
 - the current production-readiness roadmap lives in `docs/audit.md`
-- `docs/roadmap` is the short current roadmap
-- `docs/support-operations.md` is the support triage and privacy runbook
-- `docs/planning-sync-operations.md` is the planning sync conflict and drift runbook
+- `docs/roadmap.md` is the short current roadmap
+- `docs/operations.md` covers support, planning sync, account lifecycle, data-rights, and security-header runbooks
 - `docs/ai-governance.md` is the AI prompt, output-guard, and eval operations note
 - account export, email change, and deletion requests live in Settings and the admin account queue
-- `docs/design` is now only a historical archive pointer, not implementation truth
+- historical build prompts and stale design notes have been removed from the active docs surface
 
 ## Core Promise
 

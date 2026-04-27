@@ -1,0 +1,21 @@
+# Documentation
+
+Last updated: April 27, 2026.
+
+This folder is the active documentation set for Skolskribenten. It intentionally excludes historical build prompts and stale design notes.
+
+## Active Docs
+
+- `audit.md`: current production-readiness audit, remaining risks, and phased plan.
+- `roadmap.md`: short operational roadmap.
+- `billing-security.md`: Stripe, account entitlement, webhook, and billing reconciliation contract.
+- `ai-governance.md`: AI request state model, output guard, eval baseline, and AI operations.
+- `operations.md`: support, planning sync, account lifecycle, data-rights, and security-header runbooks.
+
+## Documentation Policy
+
+- Keep implementation truth in code, migrations, and tests.
+- Keep `audit.md` current when a risk is fixed, deferred, or newly discovered.
+- Keep `roadmap.md` short; move detailed runbooks into `operations.md`, `billing-security.md`, or `ai-governance.md`.
+- Do not add archive prompts, speculative product briefs, or stale design snapshots to this folder.
+- When a document stops describing the live app, update it or delete it.

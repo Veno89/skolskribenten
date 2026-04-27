@@ -1,628 +1,149 @@
-# Audit
-This is a production-readiness assessment of the live Skolskribenten repository. The first full pass was completed on April 23, 2026, with focused billing hardening and a deeper non-billing product/security audit added on April 26, 2026.
+# Production Audit
 
-## April 26, 2026 Billing Security Hardening Addendum
-The account, subscription, Stripe Checkout, portal, webhook, and entitlement flow has now been hardened as financial/security-critical infrastructure. The detailed state machine, threat model, runbooks, and residual risks live in `docs/billing-security.md`.
+Last updated: April 27, 2026.
 
-Implemented:
-- durable Stripe customer, checkout session, subscription, entitlement, and event-ledger tables in `supabase/migrations/013_billing_hardening.sql`
-- authoritative entitlement backfill, signup defaults, stale webhook-event reclamation, and Stripe-object identity checks in `supabase/migrations/014_authoritative_entitlement_hardening.sql`
-- uniqueness constraints for user/customer mappings, Checkout Session IDs, Subscription IDs, and Stripe Event IDs
-- transactional RPCs for customer mapping, event claiming/completion, checkout projection, subscription projection, and profile projection syncing
-- Checkout, portal, cloud sync, and generation quota now read `account_entitlements` instead of trusting stale `profiles` projection fields
-- durable webhook event payload storage now keeps a sanitized Stripe object summary rather than full customer/payment details
-- server-owned Stripe price allowlist/config validation with fail-fast missing/malformed key handling
-- Stripe idempotency keys for customer, checkout, and portal POST operations
-- Checkout fulfillment through verified webhooks and Stripe-retrieved objects instead of redirect state
-- subscription state behavior for `trialing`, `active`, `past_due`, `unpaid`, `canceled`, `paused`, `incomplete`, and `incomplete_expired`
-- strict no-grace `past_due` policy pending business confirmation
-- centralized entitlement decision helpers in `lib/billing/entitlements.ts`
-- account-page technical payment state visibility for local entitlement reason, Stripe IDs, last event, and reconciliation time
-- reconciliation tooling via `pnpm billing:reconcile` and `pnpm billing:reconcile:repair`
+This audit reflects the current repository after the billing hardening work and the non-billing Phase A-E improvements. It is the active risk register, not an archive of older prompts.
 
-Verified locally on April 26, 2026:
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm build`
+Canonical deep docs:
+- `docs/billing-security.md` for Stripe, entitlement, webhook, portal, and reconciliation behavior.
+- `docs/ai-governance.md` for AI prompt/guard/eval operations.
+- `docs/operations.md` for support, planning sync, account lifecycle, and security-header runbooks.
+- `docs/roadmap.md` for the short phase map.
 
-Result:
-- all three checks passed
-- the billing hardening pass had 158 passing tests at that point
+## Current Readiness
 
-Remaining launch gates:
-- apply migrations `013_billing_hardening.sql` and `014_authoritative_entitlement_hardening.sql` to the target Supabase environment
-- run live Stripe test-mode checkout, async-payment, portal, cancellation, and webhook replay verification
-- confirm whether strict immediate revocation for `past_due` is the desired business policy
-
-## April 26, 2026 Non-Billing Product And Security Audit Addendum
-Scope reviewed:
-- AI generation route, prompt construction, model/provider configuration, stream handling, quota reservation, and usage-event recording.
-- GDPR scrubber, server-side sensitive-content guard, document parser/renderer, and copy-to-clipboard flow.
-- Drafting workspace, local draft persistence, sign-out storage clearing, planning workspace, planning cloud sync, conflict queue, import/export, and direct planning generation.
-- Public support/contact intake, abuse controls, support database table, operational logging, and alert sanitization.
-- Auth actions, password policy, settings/account profile update flow, protected route middleware, security headers, legal/FAQ/contact copy, README, roadmap, and historical design docs.
-- Non-billing tests for AI, GDPR, support, planning, auth policy, middleware, request context, and storage helpers.
-
-Phase A implementation update:
-- Support submissions now run a server-side sensitive-content check before storage, reject obvious names/personnummer/contact details, store request IDs and lifecycle status fields, and avoid raw email addresses in route-level duplicate/rate-limit logs.
-- `supabase/migrations/015_support_privacy_lifecycle.sql` adds support request status, owner, handled/redacted/deleted timestamps, request IDs, indexes, and a status timestamp trigger.
-- Sign-out and Settings now share a clear-all local data utility for drafts, planning checklist state, planning sync queues, and onboarding state.
-- Planning import/export now has file-size, entry-count, and teacher-note length guardrails plus an explicit warning that exports can contain planning notes.
-
-Phase B implementation update:
-- `supabase/migrations/016_support_admin_operations.sql` adds a server-side `app_admins` allowlist for privileged support operations.
-- `/admin/support` now provides an admin-gated support queue with open/status filters, assignment, status updates, redaction, and soft deletion.
-- Support destructive actions require explicit confirmation and replace stored message/contact content with placeholders instead of spreading it into logs or external tools.
-- New support intake can emit a sanitized info event to `OPS_ALERT_WEBHOOK_URL` without submitted name, email, role, or message text.
-- `pnpm support:retention` and `pnpm support:retention:repair` provide dry-run-first soft deletion for resolved/spam support rows older than the retention cutoff.
-- `docs/support-operations.md` now defines admin access, status meanings, triage, redaction, deletion, retention, and incident handling.
-
-Phase C implementation update:
-- `supabase/migrations/017_revisioned_planning_sync.sql` adds server-owned planning revisions, separate client edit timestamps, a `planning_sync_conflicts` audit table, and a transactional `save_planning_checklist_revisioned` RPC.
-- Planning checklist writes now require `baseRevision` once a cloud row exists; stale writes return `409 CONFLICT_STALE_PLANNING_REVISION` with server and merged states rather than relying on client-supplied timestamps.
-- Conflict rows record scope, server/client revisions, server/client progress maps, note hashes/lengths, and resolution metadata without storing duplicate raw teacher notes.
-- The planning sync queue now preserves revision tokens, conflict IDs, server timestamps, and resolution strategy, and autosave waits while a current-scope queue item is pending.
-- Local checklist storage and planning import/export preserve cloud revision metadata so stale offline edits replay through the same guarded path.
-- `/admin/planning-sync` now gives server-gated visibility into conflict counts, unresolved/resolved conflict rows, recent sync rows, and clock-drift signals without displaying raw teacher notes.
-- `docs/planning-sync-operations.md` documents the planning sync state model and conflict/drift runbook.
-
-Phase D implementation update:
-- `supabase/migrations/018_ai_governance_metadata.sql` adds AI provider/model, prompt version, output-guard version, guard pass/fail state, and non-content warning labels to `usage_events`.
-- `app/api/ai/route.ts` now assembles generated text server-side, validates it before response delivery, blocks obvious reintroduced identifiers or new person placeholders, releases reserved quota on blocked output, and records non-content metadata for both allowed and blocked generations.
-- `lib/ai/governance.ts`, `lib/ai/output-guard.ts`, and `lib/ai/eval-fixtures.ts` provide versioned AI metadata, a centralized post-generation output guard, and synthetic regression fixtures.
-- The drafting client now surfaces non-blocking output-guard warnings beside the generated document.
-- `docs/ai-governance.md` documents the AI request state model, usage metadata contract, guard policy, eval baseline, change process, and residual risks.
-- Follow-up completion on April 27, 2026 adds provider timeout/error classification, `pnpm ai:smoke` with synthetic scrubbed input, and `/admin/ai-governance` for guard/version diagnostics without raw content.
-
-Phase E implementation update:
-- `supabase/migrations/019_account_lifecycle_security.sql` adds `account_deletion_requests` for admin-handled deletion workflows.
-- Settings now supports confirmed email change, authenticated account JSON export, local data clearing, and account deletion requests.
-- `/api/account/export` returns the authenticated user's profile, planning, support, usage, account-deletion, and billing projection data without caching.
-- `/admin/account-requests` gives server-gated visibility into deletion/data-rights requests.
-- Registration no longer returns a specific already-registered error, reducing account enumeration.
-- Middleware now protects `/admin`, adds `frame-ancestors 'none'`, emits CSP report-only headers to `/api/csp-report`, and sets HSTS in production.
-- `docs/account-security-operations.md` documents account export, deletion request handling, and CSP rollout.
-
-Phase D local verification on April 26, 2026:
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test` (31 test files, 181 tests)
-- `pnpm build`
-- `git diff --check`
-
-Result:
-- all checks passed locally
-
-Phase D/E completion verification on April 27, 2026:
-- `pnpm typecheck`
-- `pnpm lint`
-- `pnpm test` (34 test files, 188 tests)
-- `pnpm build`
-- `node --check scripts/ai-smoke.mjs`
-- `git diff --check`
-
-Result:
-- all checks passed locally
-
-### Highest-Priority Findings
-#### 1. Support intake can become an accidental sensitive-content database
-Severity: High
-
-Why it matters:
-The product promise is strongest when teacher-written content stays out of durable storage. The support form is a necessary exception, and the server now rejects obvious sensitive content before storage. It still needs a complete operational lifecycle: triage UI, retention execution, deletion/redaction workflow, and incident runbook.
-
-Evidence:
-- `app/api/support/route.ts` stores `name`, `email`, `role`, `topic`, `message`, request ID, status, and optional `user_id` through the admin client after schema, honeypot, rate-limit, duplicate, and sensitive-content checks.
-- `supabase/migrations/015_support_privacy_lifecycle.sql` adds lifecycle fields and status timestamp handling, but no automated retention job or admin triage surface exists yet.
-- `components/shared/ContactForm.tsx` and `app/kontakt/page.tsx` include user-facing warnings not to paste pupil names or full raw documentation.
-- Duplicate/rate-limit logs now use a hashed email value, but support operators still need an admin-safe lookup and redaction workflow.
-
-Fix direction:
-- Keep the support-copy warnings and server-side sensitive-content test coverage from regressing.
-- Build the support triage/admin flow around the new status, owner, handled, redacted, deleted, and request ID fields.
-- Add a retention job/runbook and admin-only support workflow. Until then, support storage is an operational liability.
-- Keep raw support email addresses out of route logs; use `user_id`, request ID, hashed email, or coarse counters.
-
-#### 2. The local/browser data lifecycle is not yet strong enough for school/shared-device reality
-Severity: High
-
-Why it matters:
-The app avoids storing drafting content in the database, but it still stores teacher-written material in browser storage. Drafting notes live in `localStorage` for up to 12 hours. Planning notes, sync queue entries, onboarding state, and planning export/import payloads can also live on the device. The new clear-all control reduces shared-device risk, but the lifecycle still needs an autosave setting and a clearer retention contract.
-
-Evidence:
-- `hooks/useDraftPersistence.ts` persists raw drafting input and custom names in `localStorage`.
-- `components/auth/SignOutButton.tsx` now clears draft, planning checklist, planning sync queue, and onboarding storage through `lib/privacy/local-data.ts`.
-- `hooks/usePlanningChecklist.ts` stores `teacherNotes` and sync queues in `localStorage`.
-- `app/api/planning/checklist/route.ts` stores Pro cloud-sync `teacher_notes` in `planning_checklists`.
-- `lib/planning/checklist-storage.ts` now caps planning import size, export/import entry count, and teacher-note length; `components/planning/PlanningWorkspace.tsx` warns that exports may contain planning notes.
-
-Fix direction:
-- Keep the single "clear all local data" utility covering draft, planning, sync queue, and onboarding keys wired to sign-out and Settings.
-- Add local autosave on/off controls and deepen the Settings privacy copy around planning cloud sync.
-- Add planning local-data TTL or explicit "keep until cleared" copy.
-- Keep import size limits, safer parse errors, and export warnings covered by tests.
-- Decide whether planning teacher notes should be scrubbed/rejected before cloud sync, or whether the feature is explicitly allowed to store teacher notes under a documented policy.
-
-#### 3. Planning cloud sync is now revisioned, but still needs operational maturity
-Severity: Medium-High
-
-Why it matters:
-Teachers will read "cloudsync" as dependable cross-device state. The implementation now has server-authored revisions, conditional writes, and conflict history, which removes the largest timestamp race. It is still not collaboration-grade real-time sync and still needs operational visibility around conflicts and drift.
-
-Evidence:
-- `app/api/planning/checklist/route.ts` calls `save_planning_checklist_revisioned` and returns server/merged states on stale `baseRevision`.
-- `supabase/migrations/017_revisioned_planning_sync.sql` makes `planning_checklists.updated_at` server-owned, adds `client_updated_at`, and stores planning conflict audit rows.
-- `lib/planning/cloud-merge.ts` merges checklist status by "highest status wins" and concatenates notes with a divider.
-- `hooks/usePlanningChecklist.ts` maintains a client-side queue in browser storage and replays revisioned writes sequentially.
-- `/admin/planning-sync` exposes conflict counts, conflict metadata, recent sync rows, and client-clock drift signals without raw notes.
-
-Fix direction:
-- Add alerting for planning sync conflict spikes and repeated stale-write failures.
-- Add browser-level tests for offline/online conflict resolution flows, not only route and storage tests.
-- Decide whether planning teacher notes should be scrubbed/rejected before cloud sync, or whether the feature explicitly stores teacher notes under a documented policy.
-- Keep product copy honest: revisioned sync is reliable backup/sync, not multi-user collaborative editing.
-
-#### 4. AI safety now has a baseline guard and eval harness, but still needs production operations
-Severity: Medium
-
-Why it matters:
-The AI route is much safer than a pass-through endpoint, and Phase D removes the biggest blind spot by validating generated output before it reaches the browser. The remaining risk is release discipline and breadth: broader red-team coverage, smoke automation, alerting on guard failures, and teacher feedback/reporting loops.
-
-Evidence:
-- `app/api/ai/route.ts` re-scrubs input and blocks likely sensitive content before calling Anthropic.
-- Generated text is now assembled server-side and passed through `validateAiOutput` before response delivery.
-- Blocked generated output releases the reserved transform and records `output_guard_passed = false` without storing raw prompt or output text.
-- `lib/ai/prompts.ts` contains strong instructions, and `lib/ai/governance.ts` now versions provider/model, prompt, and output guard metadata on usage events.
-- `lib/ai/eval-fixtures.ts` and focused tests cover the first synthetic red-team cases, placeholder preservation, warning headers, and blocked-output behavior.
-- `app/api/ai/route.ts` now classifies provider timeout/rate-limit/provider errors and releases reserved quota on provider failure.
-- `/admin/ai-governance` exposes guard/version diagnostics without raw content.
-- `pnpm ai:smoke` provides a live synthetic provider smoke path, but it is not yet wired into release automation.
-
-Fix direction:
-- Expand the offline eval suite with more names, personnummer, mixed Swedish names, incident reports, planning notes, and unsupported factual-addition cases.
-- Wire `pnpm ai:smoke` into staging/release automation with synthetic scrubbed content only.
-- Add alerting for output-guard failure spikes and provider-error spikes.
-- Add teacher feedback/report-without-content workflow.
-
-#### 5. Account lifecycle and user data rights have a baseline, but deletion still needs policy decisions
-Severity: Medium
-
-Why it matters:
-The basic auth flows work, and Phase E adds the missing baseline for email change, data export, and deletion requests. The remaining risk is policy and operations: when deletion can be automated, what must be retained for billing/support/legal reasons, and whether session/device visibility or MFA is needed before broad launch.
-
-Evidence:
-- `app/(auth)/actions.ts` has login, registration, confirmation resend, password reset, password update, and sign-out flows.
-- `components/dashboard/settings/SettingsPageContent.tsx` now exposes profile settings, email change, account JSON export, local-data clearing, and account deletion request.
-- `/api/account/export` returns the authenticated user's own profile, planning, support, usage, deletion request, and billing projection data.
-- `supabase/migrations/019_account_lifecycle_security.sql` adds `account_deletion_requests`.
-- `/admin/account-requests` provides server-gated visibility for deletion/data-rights requests.
-- Registration no longer returns a specific "already registered" message.
-- There is still no true session/device list or MFA setting.
-
-Fix direction:
-- Decide whether deletion can be automated for accounts without active billing or retention blockers.
-- Add admin actions/runbook steps for completing, rejecting, or cancelling deletion requests.
-- Add app-level throttling around auth-related server actions if Supabase platform limits are not enough for the intended launch.
-- Decide whether session/device visibility or MFA is needed before broad launch.
-- Track live Supabase security settings, including leaked-password protection availability, as part of release sign-off.
-
-#### 6. Security headers now have report-only telemetry, but nonce/hash CSP is still future work
-Severity: Medium
-
-Why it matters:
-Middleware applies useful baseline headers and now has a report-only loop, but the production CSP still allows inline scripts/styles. This is common in early Next.js apps, but it is not the posture to stop at for a privacy-sensitive app.
-
-Evidence:
-- `lib/supabase/middleware.ts` sets `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, and CSP.
-- Production `script-src` still includes `'unsafe-inline'`; `style-src` includes `'unsafe-inline'`.
-- CSP now includes `frame-ancestors 'none'`.
-- `Content-Security-Policy-Report-Only` points at `/api/csp-report`.
-- Production middleware now sets HSTS.
-
-Fix direction:
-- Use CSP reports from staging/production to identify required script/style changes.
-- Move toward nonce/hash-based scripts if feasible.
-- Add tests that assert the intended production CSP shape.
-
-#### 7. Operational visibility is improving, but still not full incident readiness
-Severity: Medium
-
-Why it matters:
-Request IDs and sanitized operational alerts are a good foundation. The app still lacks client-side error monitoring, support triage visibility, AI/provider health metrics, planning-sync drift dashboards, release smoke automation, and documented ownership for incidents outside billing.
-
-Evidence:
-- `lib/server/request-context.ts` adds request IDs and structured logs.
-- `lib/server/operational-alerts.ts` can forward sanitized route errors through `OPS_ALERT_WEBHOOK_URL`.
-- There is no Sentry/OpenTelemetry-style client capture, admin support view, AI failure dashboard, or post-deploy smoke workflow.
-
-Fix direction:
-- Wire `OPS_ALERT_WEBHOOK_URL` in staging/production and test it deliberately.
-- Add client error monitoring with strict PII scrubbing.
-- Add admin/debug surfaces for support requests, AI failures, planning sync conflicts, and account/data-deletion requests.
-- Add smoke tests for auth, AI generation, support validation, planning sync, and billing portal creation.
-
-### Missing Capabilities For This App Category
-- Privacy controls: local autosave setting, deeper planning cloud-sync storage policy, export/delete account data, support-message deletion request flow. A clear-all local data path now exists.
-- AI governance: prompt/model/output-guard versioning, a first synthetic eval baseline, post-generation blocking, output warnings, provider-error classification, synthetic smoke, and admin guard metrics now exist. Remaining work is broader red-team coverage, alerting, teacher feedback/rating, and issue-report-without-content workflow.
-- Support operations: deployed notification validation, scheduled retention automation, abuse dashboard, and broader incident runbooks. A minimal admin queue, status/owner fields, redaction/deletion actions, sanitized notifications, retention tooling, and support PII runbook now exist.
-- Planning reliability: revisioned sync, server-owned timestamps, deterministic conflict handling, conflict audit history, import/export guardrails, and admin conflict visibility. Remaining work is alerting, browser-flow coverage, and a final teacher-notes cloud policy.
-- Account management: email change, account export, and deletion-request intake now exist. Remaining work is deletion completion policy, session/device visibility, optional MFA/security settings, and live auth-security sign-off.
-- Release confidence: staging smoke tests, production smoke tests, accessibility record, live AI provider smoke, uptime/error monitoring.
-
-### Non-Billing Phased Plan Of Attack
-Phase A: Privacy and data lifecycle hardening
-- Treat support, local drafts, planning local state, planning cloud sync, and exports as first-class data stores.
-- Implemented baseline: support sensitive-content rejection, hashed support route logs, support lifecycle columns, clear-all controls, sign-out cleanup, planning import/export guardrails, and focused tests.
-- Remaining: retention policy execution, deletion/redaction runbooks, support admin workflow, local autosave setting, and the final policy decision on planning teacher notes in cloud sync.
-
-Phase B: Support and operations
-- Implemented baseline: support status fields, server-side admin allowlist, minimal admin/support view, assignment, redaction, soft deletion, request IDs, hashed route logs, sanitized support notifications, retention tooling, and support PII runbook.
-- Configure and test route alerts in staging/production.
-- Remaining: deployed alert validation, scheduled retention automation, abuse dashboard, and incident runbooks for AI provider failures, planning sync conflicts, and account deletion.
-
-Phase C: Planning sync reliability
-- Implemented baseline: server-generated revisions, conditional writes through a transactional RPC, server-owned `updated_at`, separate `client_updated_at`, durable conflict audit rows, revision-aware queue replay, route/storage tests, and an admin/debug page for conflicts and drift.
-- Remaining: browser-flow coverage for offline/online resolution, deployed migration verification, alerting for conflict spikes, and a final policy decision on synced teacher notes.
-
-Phase D: AI quality and safety
-- Implemented baseline: prompt/model/output-guard version fields in usage events, centralized post-generation output guard, blocked-output quota release, teacher-visible warning headers, synthetic eval fixtures/tests, provider timeout/error classification, synthetic AI smoke script, and admin guard/version diagnostics.
-- Remaining: broaden the golden/red-team suite for Swedish school documentation, wire smoke tests into release automation, add alerting for guard failure spikes, and add teacher feedback/report-without-content workflow.
-
-Phase E: Account lifecycle and security hardening
-- Implemented baseline: confirmed email change, authenticated account JSON export, admin-tracked deletion requests, account-request admin visibility, less specific registration duplicate handling, admin middleware protection, CSP report-only endpoint, `frame-ancestors 'none'`, and production HSTS.
-- Remaining: decide whether deletion can be automated for accounts without billing/retention blockers, add session/device visibility or MFA if needed, add app-level auth throttling if Supabase controls are insufficient, move CSP toward nonce/hash enforcement, and complete manual accessibility/live auth-security sign-off.
-
-Non-billing Phase A/B implementation verification on April 26, 2026:
-- `pnpm typecheck`
-- `pnpm lint`
-- `pnpm test -- lib/server/__tests__/operational-alerts.test.ts lib/support/__tests__/admin.test.ts app/api/support/route.test.ts`
-- `node --check scripts/retention-support.mjs`
-- `pnpm build`
-
-Result:
-- typecheck, lint, retention script syntax check, and production build passed
-- Vitest passed with 167 tests. The package script forwarded the path filter as a literal `--`, so the command exercised the full suite rather than only the named files.
-
-Non-billing Phase C implementation verification on April 26, 2026:
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm lint`
-- `pnpm build`
-
-Result:
-- typecheck passed
-- Vitest passed with 173 tests
-- lint passed with no warnings or errors
-- production build passed
-
-Verified on April 23, 2026:
-- `pnpm typecheck`
-- `pnpm lint`
-- `pnpm test`
-- `pnpm build`
-
-Result:
-- all four checks passed
-- the April 23 baseline had 134 passing tests at that point
-
-Live Supabase note:
-- Supabase MCP access was available again on April 23, 2026, so I was able to refresh limited live project signals in this session.
-- Live security advisors confirmed that leaked-password protection is still disabled. That remains a real limitation for a password-based auth product, but on this project it is currently a plan constraint because Supabase only exposes that feature on Pro and above.
-- Live security advisors also flagged `public.support_requests` as RLS-enabled with no policies. In this repo that appears intentional because support requests are handled through the server-side admin client rather than direct client-side table access.
-
-## Executive Summary
-Skolskribenten now has a strong advanced-MVP codebase. The core teacher workflow is real, the GDPR-first architecture still holds, planning is no longer a placeholder, billing correctness is materially better than before, and the repository is healthy under typecheck, lint, test, and production build.
-
-It is not yet production-ready.
-
-The remaining gap is not "finish the app." The remaining gap is production discipline:
-- no real observability or alerting layer is visible in the repo
-- no release workflow beyond CI is visible in the repo
-- critical live/manual sign-off items are still not completed
-- planning sync is now revisioned, but still needs deployed migration proof, browser-flow coverage, and alerting
-
-Current recommendation:
-- treat the product as pre-production or controlled-pilot ready
-- do not call it production-ready until the remaining non-billing operations/account/security items, the billing launch gates, and the older launch/operations gates below are complete
-
-## Current Production Readiness Snapshot
 | Area | Status | Notes |
 | --- | --- | --- |
-| Core app architecture | Strong | Clear product boundaries, working App Router structure, meaningful middleware and route coverage |
-| Privacy and GDPR model | Partial | Drafting raw notes are still scrubbed client-side and generated output is not stored. Phase A now covers support rejection, local clear-all, import/export guardrails, and support admin redaction/deletion, but planning cloud sync policy and retention automation remain open |
-| Billing correctness | Partial | The local billing/entitlement design is now much stronger after the April 26 hardening, but live end-to-end Stripe verification is still missing |
-| Testing and CI | Partial | Local quality checks are green, CI is healthy, and Dependabot now covers baseline dependency automation |
-| Security posture | Partial | Good headers, server validation, and baseline support abuse controls exist, and the app now enforces a stronger non-Pro password baseline, but launch-grade auth hardening is still incomplete |
-| Observability and incident response | Partial | Key public routes now expose request IDs and can forward sanitized error alerts to a webhook, but no full monitoring stack or validated incident workflow is visible in the repo |
-| Release management | Weak | No deploy, smoke-test, rollback, or staging workflow is visible in the repo |
-| Planning reliability | Partial | Revisioned backup/sync now exists, but it is still not collaboration-grade and still needs browser-flow and deployed-environment proof |
-| Product truth in docs | Improving | `README.md`, `docs/audit.md`, `docs/billing-security.md`, `docs/ai-governance.md`, and `docs/roadmap` now describe the current product more accurately; `docs/design` has been reduced to a historical archive pointer |
+| Billing and entitlements | Strong local design, live sign-off pending | Stripe is the payment source of truth. Local state is a durable projection with idempotent webhooks, event ledger, customer mapping, and reconciliation. Live Stripe test-mode verification is still required. |
+| Drafting privacy | Strong baseline | Drafting raw notes and generated output are not stored. Browser and server scrubbing plus output guard are in place. Teacher review remains required. |
+| Planning sync | Improved, not final | Revisioned backup/sync and conflict audit exist. Browser offline/online flow tests and conflict alerting are still needed. |
+| Support operations | Improved, not final | Admin triage, redaction, soft deletion, sanitized alerts, and retention tooling exist. Deployed alert validation and scheduled retention remain. |
+| AI safety and operations | Improved, not final | Usage metadata, output guard, provider error classification, synthetic evals, smoke script, and admin diagnostics exist. Red-team coverage and alerting need expansion. |
+| Account lifecycle | Improved, not final | Email change, JSON export, deletion requests, and admin visibility exist. Account deletion still needs policy and execution decisions. |
+| Security headers/admin protection | Improved, not final | `/admin` is middleware-protected, CSP frame blocking and report-only telemetry exist, and HSTS is production-only. CSP nonce/hash enforcement is future work. |
+| Launch readiness | Not ready for broad production | Remaining blockers are mostly live verification, retention policy, accessibility/manual QA, alerting, and operational drills. |
 
-## What Is Working Well
-- The core drafting privacy promise still maps cleanly to code. `/api/ai` only accepts scrubbed input, re-scrubs server-side, blocks suspicious input before generation, and now blocks suspicious generated output before response delivery.
-- The AI route has real safety, entitlement, quota, usage-metadata, and output-guard logic rather than naive pass-through behavior.
-- Security headers are already applied centrally in middleware through `lib/supabase/middleware.ts:9-27`.
-- Billing is materially safer than before. The authoritative Stripe/customer/session/subscription/event/entitlement projection is documented in `docs/billing-security.md`, with the durable database layer in migrations `013` and `014`.
-- The planning module is now a real product area, not dead scaffolding. The route, workspace, cloud sync, and AI-assisted planning are all live in `app/api/planning/checklist/route.ts:67-187`, `components/planning/PlanningWorkspace.tsx`, and `hooks/usePlanningChecklist.ts`.
-- The public support flow now has baseline abuse controls. The form includes a honeypot in `components/shared/ContactForm.tsx:22-88`, while the server suppresses honeypot spam, duplicate submissions, and bursty repeat requests in `app/api/support/route.ts:39-121` with helpers in `lib/support/abuse-protection.ts:20-46`.
-- Password auth no longer relies on the old bare 8-character minimum. Registration and password reset now require a 12-character password with at least one lowercase letter, one uppercase letter, and one digit through the shared policy in `lib/auth/password-policy.ts` and `app/(auth)/actions.ts`.
-- Key public routes now share request IDs and structured route logging through `lib/server/request-context.ts:71-98`, and that context is applied across AI, support, checkout, portal, and Stripe webhook handlers.
-- The ops layer now has a webhook-ready alert foundation. Sanitized route failures can be forwarded through `lib/server/operational-alerts.ts:1-175` when `OPS_ALERT_WEBHOOK_URL` is configured, without sending teacher-written content.
-- The repository now has baseline dependency automation through `.github/dependabot.yml`.
-- The repository still has a healthy local quality baseline. On April 26, 2026, focused AI verification plus the full Vitest run passed at 181 tests before the final full-suite verification in this Phase D slice.
+## What Is Working Now
 
-## Current Findings
-### 1. Production operations are still incomplete even though the monitoring foundation is now in place
-Severity: High
+- Paid access cannot be granted by success redirects alone.
+- Checkout and portal routes are authenticated and server-owned.
+- Stripe webhook handling verifies signatures, persists events, handles duplicates, and models subscription terminal states.
+- Entitlement checks rely on `account_entitlements` rather than stale profile fields.
+- Planning sync no longer depends on timestamp-only conflict detection.
+- Support requests can be triaged, assigned, redacted, soft-deleted, and retained under a dry-run-first script.
+- AI generated text is assembled server-side and checked before response delivery.
+- AI provider failures are classified into safer client responses.
+- Admin diagnostics exist for support, planning conflicts, AI governance, and account deletion requests.
+- Account export is authenticated and scoped to the current user.
+- Registration messaging no longer confirms that an email is already registered.
 
-Why it matters:
-The app can fail in production without giving the team fast, structured visibility into what broke, who was affected, and what to do next. That is acceptable for MVP experimentation, but it is not enough for a production-ready teacher-facing service that depends on auth, billing, AI generation, and webhooks.
+## Highest Priority Risks
 
-Evidence:
-- `.github/workflows/ci.yml:1-38` is still the only GitHub Actions workflow in the repository, and it only runs install, typecheck, lint, tests, and build.
-- `.github/dependabot.yml:1-11` now adds weekly dependency and GitHub Actions update automation, but that is still not release or incident automation.
-- `package.json:11-29` includes no visible error-monitoring or observability dependency such as Sentry.
-- Shared request correlation now exists in `lib/server/request-context.ts:71-98` and is wired through `app/api/ai/route.ts:277-411`, `app/api/support/route.ts:39-121`, `app/api/stripe/checkout/route.ts:15-127`, `app/api/stripe/portal/route.ts:10-62`, and `app/api/webhooks/stripe/route.ts:73-203`.
-- `lib/server/operational-alerts.ts:1-175` can now send sanitized route-error alerts to `OPS_ALERT_WEBHOOK_URL`, but the repo still shows no validated alert-routing setup, deployment smoke-test workflow, or rollback automation.
+### 1. Live Production Sign-Off Is Still Incomplete
 
-Recommended fix direction:
-- Configure `APP_ENV` and `OPS_ALERT_WEBHOOK_URL` in each deployed environment and validate that alerts reach a real team channel.
-- Add structured monitoring for key client failures on top of the new server-route alert foundation.
-- Add at least one post-deploy smoke-test path covering auth, AI generation, and billing.
-- Add explicit rollback guidance for production releases.
+The code has strong local coverage, but production readiness depends on live environment behavior:
+- Supabase migrations through `019_account_lifecycle_security.sql`
+- Stripe test-mode checkout, webhook replay, portal, subscription cancellation, and reconciliation
+- deployed `OPS_ALERT_WEBHOOK_URL` delivery
+- deployed CSP report collection
+- production security headers
+- manual auth, account, billing, planning sync, and support smoke tests
 
-### 2. Critical launch sign-off work is still incomplete
-Severity: High
+Until those checks are completed, the app should remain in controlled pilot mode.
 
-Why it matters:
-You now have code that looks serious enough to launch, which makes missing live/manual sign-off more dangerous, not less. The remaining unknowns are concentrated in exactly the places that cause painful production incidents: account security, accessibility, and payments. The product is currently being treated as desktop-first rather than mobile-first.
+### 2. Retention And Account Deletion Need Human Policy
 
-Evidence:
-- Local verification is strong, but it is still local: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` all passed on April 23, 2026.
-- There is still no completed manual accessibility execution record in the repo for `/`, `/logga-in`, `/registrera`, `/skrivstation`, `/lektionsplanering`, `/installningar`, `/konto`, `/kontakt`, and `/vanliga-fragor`.
-- There is still no recorded live Stripe test-mode verification with event IDs, webhook delivery results, and final `profiles` state.
-- Live Supabase recheck on April 23, 2026 via MCP: leaked-password protection is still disabled. Because this project is not on a Pro plan, the practical question is whether the chosen non-Pro password baseline is strong enough and explicitly documented.
+The app can collect support messages and cloud-synced planning notes. It also accepts account deletion requests, but deletion is not automated because billing, legal/accounting retention, support history, and planning data can conflict.
 
-Recommended fix direction:
-- Treat live auth hardening, accessibility execution for the primary desktop/browser flows, and Stripe end-to-end verification as launch gates.
-- Record each manual verification pass directly in this audit with date, operator, environment, result, and follow-up.
-- Keep the chosen non-Pro password baseline explicit in both product decisions and audit notes unless the project later moves to a plan that supports leaked-password protection.
+Needed decisions:
+- retention period for support messages
+- retention period for account deletion audit rows
+- whether planning notes remain an explicit storage exception
+- whether low-risk deletion requests can be automated
+- who is authorized to complete irreversible deletions
 
-### 3. The public support path has baseline abuse controls, but remains a privacy and operations gap
-Severity: High
+### 3. AI Governance Needs Broader Operational Coverage
 
-Why it matters:
-The biggest spam/abuse blocker on `/api/support` is gone, which is good progress. The remaining problem is more important: the support form is a durable free-text storage path in a product whose trust model depends on avoiding teacher-written sensitive content. That is acceptable only if it is treated as an explicit exception with warnings, retention, deletion, and support operations.
+The AI guardrails are materially stronger, but the eval suite is still synthetic and small. A production-ready workflow needs more non-real-data adversarial fixtures, release automation, alerting for guard failure spikes, and a teacher feedback path that does not store raw generated text.
 
-Evidence:
-- `app/kontakt/page.tsx:4-40` still exposes the support form publicly.
-- `components/shared/ContactForm.tsx:22-88` now includes a hidden honeypot field.
-- `app/api/support/route.ts` now suppresses honeypot spam, duplicate submissions, and repeated bursts from the same email, then rejects obvious sensitive content before storage.
-- `lib/support/abuse-protection.ts:20-46` normalizes support emails and enforces the current duplicate and rate-limit heuristics.
-- `support_requests.message` still stores accepted free text, but lifecycle fields, redaction timestamps, deletion timestamps, owner fields, request IDs, and a status timestamp trigger now exist.
-- `/admin/support` and `docs/support-operations.md` provide a minimal triage and redaction workflow. There is still no visible CAPTCHA, IP-aware limiter, abuse dashboard, notification delivery, or automated retention job.
+### 4. Planning Sync Needs Browser-Level Failure Testing
 
-Recommended fix direction:
-- Keep the current abuse protections as the baseline for pilot traffic.
-- Keep sensitive-content warnings, server-side checks, redaction, and support-admin workflow under regression coverage.
-- Add retention automation, notification delivery, and an abuse dashboard.
-- If spam shows up in practice, add stronger abuse controls such as IP-aware throttling or a higher-friction challenge.
+The server model is revisioned and conflict-aware, but browser behavior under offline, replay, tab duplication, conflict resolution, and clock drift still needs end-to-end tests. This matters because planning notes are a deliberate storage exception.
 
-### 4. Planning sync is revisioned, but not yet production-grade sync operations
-Severity: Medium
+### 5. Support Intake Is Safer, But Abuse Operations Are Thin
 
-Why it matters:
-The planning workspace is now useful, so teachers can reasonably assume that cloud sync is dependable. The implementation now has server-authored revisions, conditional writes, conflict audit rows, and an admin/debug surface. It is still backup/sync for one teacher, not real-time collaboration, and it still lacks deployed migration proof, browser-level offline/online test coverage, and alerting around repeated conflicts.
+Support now has privacy-aware triage and retention tooling. The remaining gap is operational: deployed alerts, scheduled retention, aggregate abuse metrics, and a clear incident drill for sensitive-content submissions.
 
-Evidence:
-- `app/api/planning/checklist/route.ts` now calls `save_planning_checklist_revisioned` and returns stale-write conflict details instead of relying only on client timestamps.
-- `supabase/migrations/017_revisioned_planning_sync.sql` adds server-owned revisions, client edit timestamps, and `planning_sync_conflicts`.
-- `hooks/usePlanningChecklist.ts` and the sync queue preserve base revisions, conflict IDs, server timestamps, and resolution strategy.
-- `/admin/planning-sync` exposes conflict counts, conflict rows, recent sync rows, and drift signals without showing raw notes.
+### 6. Security Headers Are Not Yet At Strict CSP
 
-Recommended fix direction:
-- Run browser-flow tests for offline/online conflict handling and queued writes.
-- Apply migration `017_revisioned_planning_sync.sql` in the deployed Supabase environment and verify live conflict behavior.
-- Add alerting for conflict spikes, repeated stale-write failures, and clock-drift anomalies.
-- Keep product copy honest: revisioned backup/sync, not collaboration-grade editing.
+The app blocks framing and collects CSP reports, but still uses report-only telemetry for tightening script/style policy. Strict nonce/hash CSP should wait for staging evidence so the app is not broken by a premature policy.
 
-### 5. The repository docs are better aligned after replacing the stale design prompt
-Severity: Low
+## Missing Capabilities Before Broad Launch
 
-Why it matters:
-The main contradiction problem is no longer the README or the old design prompt. The large stale prompt in `docs/design` has been replaced by a short historical note, and `docs/roadmap` now reflects the current phased plan. The remaining docs risk is keeping the privacy exceptions and operational plan current as code changes.
+- Full live Stripe test matrix and webhook replay runbook rehearsal.
+- Confirmed support/account deletion retention policy.
+- Browser tests for planning sync conflict resolution.
+- Accessibility pass on marketing, auth, dashboard, settings, support, planning, and admin routes.
+- Release smoke checklist that includes billing, AI, support, account export, and planning sync.
+- Alerting for Stripe webhook failures, support intake, AI provider failures, guard blocks, and planning conflict spikes.
+- Backup/restore and incident-response rehearsal for Supabase data.
 
-Evidence:
-- `README.md` now reflects the live planning route, API surface, env-var expectations, and migration state.
-- `docs/audit.md` is now the repo's best current operational source of truth.
-- `docs/design` is now a short historical archive pointer instead of a stale build specification.
-- `docs/roadmap` is now a concise current roadmap instead of two stale bullets.
+## Phased Plan
 
-Recommended fix direction:
-- Keep `docs/audit.md` as the operational source of truth.
-- Keep `docs/roadmap` short and current.
-- Delete `docs/design` entirely later if no one needs the historical placeholder.
+### Phase 1: Launch Gate
 
-## Status Of Previous Audit Items
-### Fixed Since The Previous Audit
-- Planning generation no longer rides on the generic `custom` path. The dedicated planning contract now exists in `lib/ai/provider.ts` and `lib/ai/prompts.ts`.
-- One-time billing fulfillment no longer grants access from `checkout.session.completed`. The corrected flow is in `app/api/stripe/checkout/route.ts:84-109` and `app/api/webhooks/stripe/route.ts:115-125`.
-- Stripe route error handling is more consistent than before because checkout and portal now share `lib/stripe/route-error.ts`.
-- The planning feature is no longer a route shell. It now includes checklist state, cloud sync, and direct generation.
-- The public support flow now includes baseline abuse protection through a honeypot, duplicate suppression, and per-email burst limiting in `components/shared/ContactForm.tsx`, `app/api/support/route.ts`, and `lib/support/abuse-protection.ts`.
-- Password auth now enforces a stronger app-side baseline through `lib/auth/password-policy.ts` and `app/(auth)/actions.ts`.
-- Key public routes now share request IDs and structured route logging through `lib/server/request-context.ts`.
-- Key public route errors can now be forwarded to a sanitized operational webhook through `lib/server/operational-alerts.ts`.
-- `README.md` now reflects the current routes, planning surface, env vars, and migration state.
-- Dependabot now provides baseline dependency automation through `.github/dependabot.yml`.
+- Apply and verify migrations through `019_account_lifecycle_security.sql` in staging.
+- Run full Stripe test-mode checkout, portal, cancellation, async/failure, webhook replay, and reconciliation.
+- Validate all required environment variables and fail-closed behavior in staging.
+- Run manual auth/account/security smoke tests, including account export and deletion request creation.
+- Run accessibility and mobile viewport checks for the core user flows.
+- Confirm production logging does not include secrets, payment details, raw support messages, planning notes, or generated output.
 
-### Still Open
-- The live auth posture is now partially reverified, but the project still relies on a non-Pro password-security baseline rather than leaked-password protection.
-- Accessibility execution for the primary desktop/browser flows is still pending real manual verification.
-- Live Stripe test-mode verification is still pending.
-- The new webhook-ready alert path still needs to be connected to a real incident channel and validated in a live environment.
-- Planning sync is now revisioned for multi-device confidence, but still needs browser-flow coverage, deployed migration proof, and conflict-spike alerting.
-- Support intake, local planning storage, and planning exports now have baseline Phase A privacy controls; support retention automation/live validation and planning cloud sync policy still need completion.
-- `lib/stripe/server.ts:3-10` still hardcodes and force-casts the Stripe API version.
-- `lib/billing/entitlements.ts:13-74` still leaves the meaning of `cancelled` somewhat implicit.
-- Browser persistence now has one global clear-all control for drafts, planning state, sync queues, and onboarding state; a user-level autosave setting is still open.
+### Phase 2: Operations Automation
 
-### Partially Fixed
-- Planning reliability is better than before and now revisioned, but still not collaboration-grade or live-environment proven.
-- Billing correctness is better than before, but it still lacks live end-to-end proof in a real test environment.
-- Support abuse posture is better than before, but it is still intentionally lightweight rather than operations-grade.
-- Support privacy posture is better after server-side sensitive-content rejection, lifecycle fields, hashed route logs, admin triage, redaction, soft deletion, and a support runbook. Retention automation and live operations validation are still missing.
-- Operational visibility is better than before because key public routes now share request IDs, structured logs, and a sanitized webhook-ready alert path, but the live monitoring/incident loop is still not proven.
-- Documentation alignment is much better because `README.md`, `docs/audit.md`, `docs/billing-security.md`, and `docs/roadmap` now point in the same direction, and `docs/design` has been reduced to an archive pointer.
+- Validate `OPS_ALERT_WEBHOOK_URL` delivery in deployed environments.
+- Schedule support retention only after retention policy approval.
+- Add alerts for webhook failures, AI provider failures, guard failure spikes, and planning conflict spikes.
+- Add a concise release checklist to the deploy process.
+- Rehearse backup restore and incident response.
 
-### Regressed
-- No clear regressions were confirmed relative to the prior audit baseline.
+### Phase 3: Product Reliability
 
-## Important Refactors
-- Split `hooks/usePlanningChecklist.ts` into smaller units. It still mixes storage, queue state, replay, fetching, conflicts, and UI-facing state.
-- Split the planning UI into smaller presentation layers. The workspace and onboarding surfaces still carry a lot of responsibility.
-- Extend the shared server-surface pattern beyond the current public routes so validation, rate limiting, structured errors, and request IDs stay consistent everywhere.
-- Route the new shared request-context logging into a real monitoring sink so AI, support, and Stripe failures are not only visible in server logs.
+- Add browser-level tests for planning sync offline/replay/conflict resolution.
+- Expand AI golden and red-team fixtures with synthetic data only.
+- Add teacher feedback/reporting without storing raw generated text.
+- Improve support abuse visibility with aggregate metrics.
+- Decide whether local autosave should be user-configurable.
 
-## Dead Code And Cleanup Candidates
-- `docs/design` is now only a historical archive pointer. It can be deleted later if no contributor needs the placeholder.
-- No high-confidence dead runtime code stood out in the current pass. The main cleanup signal is operational drift and documentation drift, not obvious unused production code.
+### Phase 4: Security Maturity
 
-## Should-Have Functionality Before Production
-- Real error monitoring and alerting for auth, AI, support, and Stripe webhook failures.
-- Complete privacy/data-lifecycle controls for support messages, local browser storage, planning cloud sync, and planning exports. Phase A now covers baseline controls, but not the full retention/admin policy.
-- Support triage workflow with retention, deletion, and redaction handling. A minimal workflow now exists; retention automation still needs confirmation and implementation.
-- Broader AI red-team/evaluation coverage, guard metrics, provider timeout/error classification, and live synthetic smoke tests. Prompt/model/output-guard versioning plus a first eval baseline now exist.
-- One completed accessibility pass for the primary desktop/browser flows recorded in this audit.
-- One completed live Stripe test-mode verification recorded in this audit.
-- Re-verified live account-security posture, including the accepted non-Pro password-security baseline if the project stays below Supabase Pro.
-- A release checklist with smoke tests and rollback steps.
-- A deliberate product decision on planning sync guarantees.
+- Move CSP from report-only tightening toward nonce/hash enforcement.
+- Decide whether to add MFA or session/device visibility.
+- Add app-level auth throttling if Supabase controls are insufficient for the launch profile.
+- Automate safe account deletion for accounts without billing or retention blockers, if approved.
 
-## Nice-To-Have Later
-- Broader curriculum coverage across more subjects and more than one area per subject.
-- A user-controlled privacy toggle for local draft and planning persistence.
-- Cleaner in-product explanations for planning conflict choices.
-- A more explicit surfaced meaning for the `cancelled` subscription state if it remains in the data model.
-- Light analytics for product learning once the operational basics are in place.
+## Current Verification Baseline
 
-## UI/UX Audit
-- The drafting flow is polished enough to support real users. The workflow feels intentional rather than improvised.
-- The account page is clear, and the billing copy is notably honest. That is a trust strength worth keeping.
-- The planning workspace is now useful, but the reliability promise still needs careful wording because the sync model is heuristic rather than versioned.
-- Accessibility basics exist, including the skip link, `aria-live` usage, and security-minded middleware, but the absence of a completed manual pass still matters.
-- One rough edge remains in the planning onboarding surface: `components/planning/PlanningOnboardingPanel.tsx:22-32` still relies on `window.alert` for copy confirmation and failure messaging. That is not a production blocker, but it does feel less polished than the rest of the product.
-- The biggest UX trust problem is no longer inside the app. It is the remaining gap between polished in-app behavior and incomplete live/manual sign-off.
+Most recent local verification before this docs cleanup:
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm test`
+- `pnpm build`
+- `git diff --check`
+- `node --check scripts/ai-smoke.mjs`
 
-## Phased Implementation Plan
-### Phase 1: Production Gate
-Goal:
-Close the launch blockers that would make a real production rollout irresponsible.
+`pnpm ai:smoke` is intentionally manual because it calls the live Anthropic API and requires configured secrets.
 
-Concrete tasks:
-- Re-verify live Supabase auth security settings and keep the chosen non-Pro password baseline explicit unless the project later moves to Supabase Pro.
-- Execute and record the accessibility pass for the core public and dashboard routes in the primary desktop/browser experience.
-- Run and record live Stripe test-mode verification for both the monthly and one-time flows.
-- Record the results directly in this audit so the launch-signoff evidence lives in one place.
+## Documentation Cleanup
 
-Expected impact:
-- Removes the most immediate production risk across account security, payments, and public input surfaces.
-- Gives you an actual launch sign-off record instead of relying on local confidence.
+Removed from active docs:
+- the old design prompt placeholder
+- the audit-agent prompt archive
+- separate support, planning sync, and account-security operation files now merged into `docs/operations.md`
+- extensionless `docs/roadmap`, replaced by `docs/roadmap.md`
 
-Dependencies:
-- Live Supabase access
-- Live or test Stripe access
-- Manual browser and screen-reader execution time
+The active docs set is intentionally small. Add new docs only when they are operationally useful and can be kept current.
 
-### Phase 2: Operations And Release Maturity
-Goal:
-Make failures visible, actionable, and recoverable.
+## Residual Risk
 
-Concrete tasks:
-- Configure `APP_ENV` and `OPS_ALERT_WEBHOOK_URL` in each environment and validate sanitized alert delivery from the shared route layer.
-- Add structured production monitoring for key client errors on top of the new server-route alert foundation.
-- Add a deployment checklist, post-deploy smoke tests, and rollback notes.
-- Build on the new Dependabot baseline with security scanning or additional scheduled checks.
-
-Expected impact:
-- Faster incident detection
-- Lower mean time to diagnose failures
-- Safer releases
-
-Dependencies:
-- Tooling decision for monitoring
-- Decision on where release runbooks should live
-
-## Release And Smoke Checklist
-Pre-release baseline:
-- Confirm `APP_ENV` is set correctly for the target environment.
-- Confirm `OPS_ALERT_WEBHOOK_URL` is configured for staging or production and points to a real incident channel.
-- Make sure CI is green and check whether any open Dependabot updates need to be handled before release.
-
-Post-deploy smoke pass:
-- Load `/`, `/logga-in`, `/registrera`, `/kontakt`, and `/vanliga-fragor`.
-- Confirm `/skrivstation`, `/lektionsplanering`, `/installningar`, and `/konto` still load for an authenticated teacher account.
-- Verify `/api/support` still returns an `X-Request-Id` header on a controlled validation failure.
-- Run one authenticated AI generation, one planning sync, and one billing portal open.
-- In test mode, verify both Stripe purchase paths and confirm the final `profiles` result plus webhook handling.
-
-Rollback baseline:
-- Revert the last deploy or re-promote the previous healthy release.
-- Repeat the short smoke pass on the restored version.
-- Use the request ID from the failed release path to trace the error and confirm whether an operational alert was emitted.
-
-### Phase 3: Product Reliability Hardening
-Goal:
-Resolve the remaining places where product promise and implementation guarantees are still slightly out of alignment.
-
-Concrete tasks:
-- Execute browser-level and manual planning conflict scenarios and capture results in this audit.
-- Add operational alerting for repeated planning conflicts, stale-write failures, and drift anomalies.
-- Resolve the `cancelled` subscription-state meaning more explicitly.
-- Remove the Stripe API-version force-cast in `lib/stripe/server.ts`.
-- Decide whether local draft and planning persistence should become user settings.
-
-Expected impact:
-- More honest product messaging
-- Fewer ambiguous account and sync behaviors
-- Lower long-term maintenance risk
-
-Dependencies:
-- Product decision on planning scope
-- Small implementation pass across billing and settings
-
-### Phase 4: Production Truth And Scale Preparation
-Goal:
-Align the repo, docs, and support posture with the product you are actually operating.
-
-Concrete tasks:
-- Decide whether to delete the now-minimal `docs/design` archive pointer.
-- Add a minimal support-and-incident operating note so future contributors understand the live service expectations.
-- Keep `docs/roadmap` aligned with this audit as phases move from planned to implemented.
-- Expand curriculum coverage only after the reliability baseline is locked in.
-
-Expected impact:
-- Less onboarding friction
-- Fewer stale assumptions
-- Better readiness for broader growth after launch
-
-Dependencies:
-- Phase 1 and Phase 2 should be largely complete first so the docs do not immediately go stale again
-
-## Verification Gaps
-- I refreshed a limited slice of live Supabase project state on April 23, 2026 through MCP, but I did not validate every hosted auth setting beyond the surfaced advisor results.
-- I did not run a live Stripe checkout in this session.
-- I did not execute manual browser or screen-reader testing in this session.
-- I did not validate any deployed staging or production environment because no deploy workflow or live environment controls were available in-session.
-
-## Final Recommendation
-Skolskribenten is close to being launchable, but it is still better described as pre-production than production-ready.
-
-The good news is that the path ahead is clear:
-1. finish the privacy/data-lifecycle work in non-billing Phase A
-2. make support and operations real through Phase B and the older Phase 2
-3. prove revisioned planning sync under browser/offline/deployed conditions
-4. broaden AI governance beyond the Phase D baseline with live synthetic smoke tests and guard metrics
-5. finish the launch gates in the older Phase 1 and the billing launch gates in `docs/billing-security.md`
-
-If those items are completed cleanly, I would be comfortable re-auditing for a production-ready recommendation. Right now, I would recommend a controlled pilot or limited founder-led onboarding, not a broader production claim.
+No documentation or guardrail can prove the app impossible to misuse. The remaining practical risk is concentrated in live-environment configuration, human retention decisions, and operational response quality. The system is much harder to abuse than the original MVP, but it should remain in controlled pilot mode until Phase 1 is complete.
