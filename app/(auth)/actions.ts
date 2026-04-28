@@ -14,7 +14,7 @@ import {
 } from "@/lib/auth/password-policy";
 import { getAppUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { getFirstIssue } from "@/lib/validations/helpers";
+import { getFirstIssue, getValue } from "@/lib/validations/helpers";
 
 const EmailSchema = z.string().trim().email("Ange en giltig e-postadress.");
 
@@ -57,11 +57,6 @@ const UpdatePasswordSchema = z
     message: "Lösenorden matchar inte.",
     path: ["confirmPassword"],
   });
-
-function getValue(formData: FormData, key: string): string {
-  const value = formData.get(key);
-  return typeof value === "string" ? value : "";
-}
 
 function toFriendlyAuthError(message: string): string {
   const normalized = message.toLowerCase();

@@ -1,11 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { UsageCounter } from "@/components/drafting/UsageCounter";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import type { Profile } from "@/types";
 
 interface Props {
@@ -15,95 +15,84 @@ interface Props {
 
 export function DashboardNav({ isAppAdmin = false, profile }: Props): JSX.Element {
   const pathname = usePathname();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const primaryLinks = [
+    { href: "/skrivstation", label: "Skrivstation" },
+    { href: "/lektionsplanering", label: "Lektioner" },
+    { href: "/installningar", label: "Inställningar" },
+    { href: "/konto", label: "Konto" },
+  ];
+  const adminLinks = isAppAdmin
+    ? [
+        { href: "/admin/support", label: "Support" },
+        { href: "/admin/planning-sync", label: "Sync" },
+        { href: "/admin/ai-governance", label: "AI" },
+        { href: "/admin/account-requests", label: "Konton" },
+      ]
+    : [];
+  const navLinks = [...primaryLinks, ...adminLinks];
+
+  const renderNavLink = (link: { href: string; label: string }, className = "rounded-full") => (
+    <Button
+      key={link.href}
+      asChild
+      variant={pathname === link.href ? "default" : "outline"}
+      size="sm"
+      className={className}
+    >
+      <Link href={link.href} onClick={() => setIsMenuOpen(false)}>
+        {link.label}
+      </Link>
+    </Button>
+  );
 
   return (
-    <nav className="flex flex-wrap items-center gap-3 py-4 px-6 mb-4 border-b">
-      <div className="flex w-full items-center justify-between md:w-auto md:flex-row gap-3 overflow-x-auto pb-2 md:pb-0">
-        <Link href="/skrivstation" className="flex shrink-0 items-center gap-2 mr-4">
+    <nav className="mb-4 border-b bg-white/80 px-4 py-4 backdrop-blur md:px-6">
+      <div className="flex items-center gap-3">
+        <Link href="/skrivstation" className="flex shrink-0 items-center gap-2 md:mr-4">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--ss-primary)] text-white">
             <span className="text-sm font-bold">S</span>
           </div>
           <span className="hidden text-sm tracking-widest text-[var(--ss-primary)] md:block">SKOLSKRIBENTEN</span>
         </Link>
-        <div className="flex shrink-0 gap-2">
-          <Button
-            asChild
-            variant={pathname === "/skrivstation" ? "default" : "outline"}
-            size="sm"
-            className="rounded-full"
-          >
-            <Link href="/skrivstation">Skrivstation</Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/lektionsplanering" ? "default" : "outline"}
-            size="sm"
-            className="rounded-full"
-          >
-            <Link href="/lektionsplanering">Lektioner</Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/installningar" ? "default" : "outline"}
-            size="sm"
-            className="rounded-full"
-          >
-            <Link href="/installningar">Inställningar</Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/konto" ? "default" : "outline"}
-            size="sm"
-            className="rounded-full"
-          >
-            <Link href="/konto">Konto</Link>
-          </Button>
-          {isAppAdmin ? (
-            <Button
-              asChild
-              variant={pathname === "/admin/support" ? "default" : "outline"}
-              size="sm"
-              className="rounded-full"
-            >
-              <Link href="/admin/support">Support</Link>
-            </Button>
-          ) : null}
-          {isAppAdmin ? (
-            <Button
-              asChild
-              variant={pathname === "/admin/planning-sync" ? "default" : "outline"}
-              size="sm"
-              className="rounded-full"
-            >
-              <Link href="/admin/planning-sync">Sync</Link>
-            </Button>
-          ) : null}
-          {isAppAdmin ? (
-            <Button
-              asChild
-              variant={pathname === "/admin/ai-governance" ? "default" : "outline"}
-              size="sm"
-              className="rounded-full"
-            >
-              <Link href="/admin/ai-governance">AI</Link>
-            </Button>
-          ) : null}
-          {isAppAdmin ? (
-            <Button
-              asChild
-              variant={pathname === "/admin/account-requests" ? "default" : "outline"}
-              size="sm"
-              className="rounded-full"
-            >
-              <Link href="/admin/account-requests">Konton</Link>
-            </Button>
-          ) : null}
+
+        <div className="hidden shrink-0 gap-2 md:flex">
+          {navLinks.map((link) => renderNavLink(link))}
         </div>
+
+        <div className="ml-auto hidden shrink-0 items-center justify-end gap-3 md:flex">
+          <UsageCounter profile={profile} />
+          <SignOutButton size="sm" variant="outline" className="rounded-full" />
+        </div>
+
+        <button
+          type="button"
+          aria-label={isMenuOpen ? "Stäng meny" : "Öppna meny"}
+          aria-expanded={isMenuOpen}
+          title={isMenuOpen ? "Stäng meny" : "Öppna meny"}
+          onClick={() => setIsMenuOpen((current) => !current)}
+          className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--ss-neutral-200)] bg-white text-[var(--ss-neutral-900)] shadow-sm md:hidden"
+        >
+          <span className="sr-only">{isMenuOpen ? "Stäng meny" : "Öppna meny"}</span>
+          <span aria-hidden="true" className="flex flex-col gap-1">
+            <span className="h-0.5 w-5 rounded-full bg-current" />
+            <span className="h-0.5 w-5 rounded-full bg-current" />
+            <span className="h-0.5 w-5 rounded-full bg-current" />
+          </span>
+        </button>
       </div>
-      <div className="flex shrink-0 items-center justify-end md:ml-auto gap-3 w-full md:w-auto">
-        <UsageCounter profile={profile} />
-        <SignOutButton size="sm" variant="outline" className="rounded-full" />
-      </div>
+
+      {isMenuOpen ? (
+        <div className="mt-4 grid gap-3 rounded-lg border border-[var(--ss-neutral-200)] bg-white p-3 shadow-sm md:hidden">
+          <div className="grid gap-2">
+            {navLinks.map((link) => renderNavLink(link, "w-full justify-start rounded-lg"))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--ss-neutral-100)] pt-3">
+            <UsageCounter profile={profile} />
+            <SignOutButton size="sm" variant="outline" className="rounded-full" />
+          </div>
+        </div>
+      ) : null}
     </nav>
   );
 }

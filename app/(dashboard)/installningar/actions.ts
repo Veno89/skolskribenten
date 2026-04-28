@@ -7,7 +7,7 @@ import { buildPath } from "@/lib/auth/redirects";
 import { getAppUrl } from "@/lib/supabase/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getFirstIssue } from "@/lib/validations/helpers";
+import { getFirstIssue, getValue } from "@/lib/validations/helpers";
 import {
   UpdateProfileSettingsSchema,
   buildUserSettings,
@@ -18,11 +18,6 @@ const DeleteAccountRequestSchema = z.object({
   confirmation: z.string().trim(),
   reason: z.string().trim().max(1000, "Beskrivningen är för lång.").optional(),
 });
-
-function getValue(formData: FormData, key: string): string {
-  const value = formData.get(key);
-  return typeof value === "string" ? value : "";
-}
 
 export async function updateSettingsAction(formData: FormData): Promise<void> {
   const supabase = createClient();

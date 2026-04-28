@@ -173,24 +173,32 @@ Phase 1 notes:
 
 Structural improvements to the codebase and user experience.
 
-- [ ] **Decompose `PlanningWorkspace.tsx`** into sub-components:
+- [x] **Decompose `PlanningWorkspace.tsx`** into sub-components:
   - `PlanningSelector` (grade band, subject, area dropdowns)
   - `PlanningChecklist` (item list with status buttons)
   - `PlanningGapSummary` (stat cards + gap list)
   - `PlanningCloudSyncPanel` (sync status, queue, conflicts)
   - `PlanningAiPanel` (prompt, generate, copy)
   - `PlanningImportExport` (export/import buttons + messaging)
-- [ ] **Decompose `usePlanningChecklist.ts`** into smaller hooks:
+- [x] **Decompose `usePlanningChecklist.ts`** into smaller hooks:
   - `usePlanningLocalState` (localStorage hydration, progress/notes)
   - `usePlanningCloudSync` (sync, conflict, queue)
   - `usePlanningSyncQueue` (queue CRUD + flush)
-- [ ] **Refactor the AI route** — extract `beginGenerationAttempt`, `releaseGenerationAttempt`, `recordUsageEvent` into `lib/ai/generation.ts`
-- [ ] **Fix DashboardNav for mobile** — implement a hamburger menu / sheet drawer for narrow screens
-- [ ] **Add first-use onboarding** to the Drafting Station — welcome panel with sample content and a walkthrough
-- [ ] **Increase sync debounce** to 1500–2000ms and stabilize dependency arrays to prevent rapid sync churn
-- [ ] **Extract duplicated `getValue` helper** into `lib/validations/helpers.ts`
-- [ ] **Move `middleware.test.ts`** from root to `lib/supabase/__tests__/`
-- [ ] **Add a proper font loading strategy** — either use `next/font` for Google Fonts (Inter or similar) or serve Aptos self-hosted
+- [x] **Refactor the AI route** — extract `beginGenerationAttempt`, `releaseGenerationAttempt`, `recordUsageEvent` into `lib/ai/generation.ts`
+- [x] **Fix DashboardNav for mobile** — implement a hamburger menu / sheet drawer for narrow screens
+- [x] **Add first-use onboarding** to the Drafting Station — welcome panel with sample content and a walkthrough
+- [x] **Increase sync debounce** to 1500–2000ms and stabilize dependency arrays to prevent rapid sync churn
+- [x] **Extract duplicated `getValue` helper** into `lib/validations/helpers.ts`
+- [x] **Move `middleware.test.ts`** from root to `lib/supabase/__tests__/`
+- [x] **Add a proper font loading strategy** — either use `next/font` for Google Fonts (Inter or similar) or serve Aptos self-hosted
+
+Phase 2 notes:
+
+- `PlanningWorkspace.tsx` now delegates selector, checklist, gap summary, cloud sync, AI, and import/export UI to focused components under `components/planning/`.
+- `usePlanningChecklist.ts` now delegates local checklist state, cloud sync metadata, and sync queue state to `hooks/planning/usePlanningLocalState.ts`, `hooks/planning/usePlanningCloudSync.ts`, and `hooks/planning/usePlanningSyncQueue.ts`.
+- Planning cloud saves now debounce at 1700ms and use stable scope/update signals with a repeated-payload guard to reduce sync churn.
+- The dashboard nav uses a mobile menu for narrow screens, and Drafting Station now has a first-run panel with a safe sample draft.
+- Fonts are loaded through `next/font/google` using Inter for UI text and Source Serif 4 for display text.
 
 ---
 

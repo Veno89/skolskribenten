@@ -14,7 +14,7 @@ describe("middleware entrypoint", () => {
   });
 
   it("delegates requests to updateSession", async () => {
-    const { middleware } = await import("./middleware");
+    const { middleware } = await import("../../../middleware");
     const request = new NextRequest("https://example.com/skrivstation");
 
     await middleware(request);

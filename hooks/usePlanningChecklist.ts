@@ -1,34 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  getPlanningStorageKey,
-  parseStoredChecklist,
-  serializeChecklistState,
-} from "@/lib/planning/checklist-storage";
+import { useEffect, useMemo, useRef } from "react";
+import { usePlanningCloudSync } from "@/hooks/planning/usePlanningCloudSync";
+import { usePlanningLocalState } from "@/hooks/planning/usePlanningLocalState";
+import { usePlanningSyncQueue } from "@/hooks/planning/usePlanningSyncQueue";
+import { isPlanningScopeMatch } from "@/hooks/planning/types";
 import type { PlanningArea, PlanningSubjectId } from "@/lib/planning/curriculum";
 import {
   analyzeChecklistGap,
-  getDefaultStatusMap,
   type ChecklistProgressMap,
-  type ChecklistStatus,
 } from "@/lib/planning/gap-analysis";
 import {
   createPlanningSyncQueueItem,
-  enqueuePlanningSyncItem,
-  getPlanningSyncQueueKey,
   markPlanningSyncItemConflict,
   markPlanningSyncItemFailed,
   markPlanningSyncItemPending,
   parsePlanningSyncQueue,
   removePlanningSyncItem,
-  serializePlanningSyncQueue,
   upsertPlanningSyncItem,
   type PlanningSyncConflictState,
-  type PlanningSyncQueueItem,
 } from "@/lib/planning/sync-queue";
 
-type CloudStatus = "idle" | "syncing" | "synced" | "error" | "conflict";
+export type CloudStatus = "idle" | "syncing" | "synced" | "error" | "conflict";
 
 type PlanningSyncResponsePayload = {
   code?: string;
@@ -49,13 +42,6 @@ type PlanningSyncResponsePayload = {
     updatedAt: string;
   };
 };
-
-function isCurrentScope(
-  target: { areaId: string; subjectId: string },
-  current: { areaId: string; subjectId: string },
-): boolean {
-  return target.areaId === current.areaId && target.subjectId === current.subjectId;
-}
 
 function buildConflictState(
   localState: {
@@ -85,35 +71,54 @@ export function usePlanningChecklist(params: {
   userId: string;
 }) {
   const { area, cloudSyncEnabled, subjectId, userId } = params;
-  const [progressMap, setProgressMap] = useState<ChecklistProgressMap>(() => getDefaultStatusMap(area));
-  const [teacherNotes, setTeacherNotes] = useState("");
-  const [updatedAt, setUpdatedAt] = useState("");
-  const [cloudRevision, setCloudRevision] = useState<number | null>(null);
-  const [cloudStatus, setCloudStatus] = useState<CloudStatus>("idle");
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [syncLog, setSyncLog] = useState<string[]>([]);
-  const [hasHydratedLocal, setHasHydratedLocal] = useState(false);
-  const [queuedSyncCount, setQueuedSyncCount] = useState(0);
-  const [queuedItems, setQueuedItems] = useState<PlanningSyncQueueItem[]>([]);
-  const [pendingConflict, setPendingConflict] = useState<PlanningSyncConflictState | null>(null);
-  const isFlushingQueueRef = useRef(false);
-
-  const storageKey = getPlanningStorageKey(userId, subjectId, area.id);
-  const syncQueueKey = getPlanningSyncQueueKey(userId);
-  const currentScope = { areaId: area.id, subjectId };
-  const currentQueuedItem = queuedItems.find((item) => isCurrentScope(item, currentScope));
-  const currentQueuedConflict =
-    currentQueuedItem?.status === "conflict" && currentQueuedItem.conflictState ? currentQueuedItem : undefined;
-  const hasPendingQueuedItem = queuedItems.some((item) => item.status === "pending");
-
-  const appendSyncLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString("sv-SE", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    setSyncLog((current) => [`${timestamp} - ${message}`, ...current].slice(0, 6));
-  };
+  const currentScope = useMemo(() => ({ areaId: area.id, subjectId }), [area.id, subjectId]);
+  const {
+    appendSyncLog,
+    cloudStatus,
+    isFlushingQueueRef,
+    lastSyncedAt,
+    pendingConflict,
+    setCloudStatus,
+    setLastSyncedAt,
+    setPendingConflict,
+    syncLog,
+  } = usePlanningCloudSync();
+  const {
+    applyStateToActiveArea,
+    cloudRevision,
+    hasHydratedLocal,
+    hydrateChecklistFromStorage,
+    progressMap,
+    resetChecklist,
+    setCloudRevision,
+    setItemStatus,
+    setUpdatedAt,
+    teacherNotes,
+    updatedAt,
+    updateTeacherNotes,
+    writeStoredChecklistState,
+  } = usePlanningLocalState({
+    area,
+    currentScope,
+    subjectId,
+    userId,
+  });
+  const {
+    currentQueuedConflict,
+    currentQueuedItem,
+    enqueueSyncPayload,
+    hasPendingQueuedItem,
+    persistQueueState,
+    queuedItems,
+    queuedSyncCount,
+    refreshQueueState,
+    syncQueueKey,
+  } = usePlanningSyncQueue({
+    cloudRevision,
+    currentScope,
+    userId,
+  });
+  const lastSyncedPayloadKeyRef = useRef<string | null>(null);
 
   const getConflictStrategyLabel = (strategy: "server" | "merged" | "local") =>
     strategy === "server"
@@ -121,114 +126,6 @@ export function usePlanningChecklist(params: {
       : strategy === "merged"
         ? "kombinerat förslag"
         : "din senaste version";
-
-  const refreshQueueState = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const queue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
-    setQueuedSyncCount(queue.length);
-    setQueuedItems(queue);
-  };
-
-  const persistQueueState = (queue: PlanningSyncQueueItem[]) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(syncQueueKey, serializePlanningSyncQueue(queue));
-    setQueuedSyncCount(queue.length);
-    setQueuedItems(queue);
-  };
-
-  const writeStoredChecklistState = (
-    target: { areaId: string; subjectId: string },
-    state: {
-      progressMap: ChecklistProgressMap;
-      revision?: number | null;
-      serverUpdatedAt?: string;
-      teacherNotes: string;
-      updatedAt: string;
-    },
-  ) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(
-      getPlanningStorageKey(userId, target.subjectId as PlanningSubjectId, target.areaId),
-      serializeChecklistState(state),
-    );
-  };
-
-  const applyStateToActiveArea = (target: { areaId: string; subjectId: string }, state: PlanningSyncQueueItem | {
-    progressMap: ChecklistProgressMap;
-    revision?: number | null;
-    teacherNotes: string;
-    updatedAt: string;
-  }) => {
-    if (!isCurrentScope(target, currentScope)) {
-      return;
-    }
-
-    setProgressMap({ ...getDefaultStatusMap(area), ...state.progressMap });
-    setCloudRevision(state.revision ?? null);
-    setTeacherNotes(state.teacherNotes);
-    setUpdatedAt(state.updatedAt);
-  };
-
-  const hydrateChecklistFromStorage = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const stored = parseStoredChecklist(window.localStorage.getItem(storageKey));
-    const defaults = getDefaultStatusMap(area);
-
-    if (!stored) {
-      setProgressMap(defaults);
-      setCloudRevision(null);
-      setTeacherNotes("");
-      setUpdatedAt("");
-      setHasHydratedLocal(true);
-      return;
-    }
-
-    setProgressMap({ ...defaults, ...stored.progressMap });
-    setCloudRevision(stored.revision ?? null);
-    setTeacherNotes(stored.teacherNotes);
-    setUpdatedAt(stored.updatedAt);
-    setHasHydratedLocal(true);
-  };
-
-  const enqueueSyncPayload = (payload: {
-    areaId: string;
-    baseRevision?: number | null;
-    progressMap: ChecklistProgressMap;
-    resolvedConflictId?: string | null;
-    resolutionStrategy?: "server" | "merged" | "local" | null;
-    revision?: number | null;
-    subjectId: string;
-    teacherNotes: string;
-    updatedAt: string;
-  }) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
-    const nextQueue = enqueuePlanningSyncItem(
-      currentQueue,
-      createPlanningSyncQueueItem({
-        ...payload,
-        baseRevision: payload.baseRevision ?? payload.revision ?? cloudRevision,
-        enqueuedAt: new Date().toISOString(),
-      }),
-    );
-
-    persistQueueState(nextQueue);
-  };
 
   const postPlanningChecklistState = async (payload: {
     areaId: string;
@@ -268,7 +165,7 @@ export function usePlanningChecklist(params: {
 
     const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
     const existingQueueItem =
-      currentQueue.find((item) => isCurrentScope(item, target)) ??
+      currentQueue.find((item) => isPlanningScopeMatch(item, target)) ??
       createPlanningSyncQueueItem({
         areaId: target.areaId,
         baseRevision: conflictState.localState.revision ?? null,
@@ -309,7 +206,7 @@ export function usePlanningChecklist(params: {
     writeStoredChecklistState(target, nextState);
     persistQueueState(nextQueue);
     applyStateToActiveArea(target, nextState);
-    if (isCurrentScope(target, currentScope)) {
+    if (isPlanningScopeMatch(target, currentScope)) {
       setPendingConflict(null);
       setCloudStatus("idle");
     }
@@ -331,7 +228,7 @@ export function usePlanningChecklist(params: {
 
     persistQueueState(nextQueue);
 
-    if (isCurrentScope(target, currentScope)) {
+    if (isPlanningScopeMatch(target, currentScope)) {
       setPendingConflict(null);
       setCloudStatus("idle");
     }
@@ -345,7 +242,7 @@ export function usePlanningChecklist(params: {
     }
 
     const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
-    const existingItem = currentQueue.find((item) => isCurrentScope(item, target));
+    const existingItem = currentQueue.find((item) => isPlanningScopeMatch(item, target));
 
     if (!existingItem || existingItem.status === "conflict") {
       return;
@@ -441,7 +338,7 @@ export function usePlanningChecklist(params: {
             hadConflict = true;
             newConflictDetected = true;
 
-            if (isCurrentScope(item, currentScope)) {
+            if (isPlanningScopeMatch(item, currentScope)) {
               setPendingConflict(conflictState);
               setCloudStatus("conflict");
             }
@@ -477,7 +374,7 @@ export function usePlanningChecklist(params: {
             writeStoredChecklistState(item, responsePayload.state);
           }
 
-          if (isCurrentScope(item, currentScope)) {
+          if (isPlanningScopeMatch(item, currentScope)) {
             setCloudRevision(responsePayload.state?.revision ?? item.revision ?? item.baseRevision ?? null);
             setLastSyncedAt(attemptedAt);
             if (!currentQueuedConflict) {
@@ -512,46 +409,6 @@ export function usePlanningChecklist(params: {
       isFlushingQueueRef.current = false;
     }
   }
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const stored = parseStoredChecklist(window.localStorage.getItem(storageKey));
-    const defaults = getDefaultStatusMap(area);
-
-    if (!stored) {
-      setProgressMap(defaults);
-      setCloudRevision(null);
-      setTeacherNotes("");
-      setUpdatedAt("");
-      setHasHydratedLocal(true);
-      return;
-    }
-
-    setProgressMap({ ...defaults, ...stored.progressMap });
-    setCloudRevision(stored.revision ?? null);
-    setTeacherNotes(stored.teacherNotes);
-    setUpdatedAt(stored.updatedAt);
-    setHasHydratedLocal(true);
-  }, [area, storageKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(
-      storageKey,
-      serializeChecklistState({
-        progressMap,
-        revision: cloudRevision,
-        teacherNotes,
-        updatedAt: updatedAt || new Date().toISOString(),
-      }),
-    );
-  }, [cloudRevision, progressMap, storageKey, teacherNotes, updatedAt]);
 
   useEffect(() => {
     refreshQueueState();
@@ -605,7 +462,7 @@ export function usePlanningChecklist(params: {
         }
 
         const queuedVersionForCurrent = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey)).find(
-          (item) => isCurrentScope(item, currentScope),
+          (item) => isPlanningScopeMatch(item, currentScope),
         );
 
         if (!payload.state) {
@@ -626,11 +483,10 @@ export function usePlanningChecklist(params: {
         const cloudDate = payload.state.updatedAt ? new Date(payload.state.updatedAt).getTime() : 0;
 
         if (cloudDate > localDate) {
-          setProgressMap({ ...getDefaultStatusMap(area), ...payload.state.progressMap });
-          setTeacherNotes(payload.state.teacherNotes);
-          setUpdatedAt(payload.state.updatedAt);
+          applyStateToActiveArea(currentScope, payload.state);
         }
 
+        lastSyncedPayloadKeyRef.current = `${subjectId}:${area.id}:${payload.state.updatedAt}:${payload.state.revision ?? "none"}`;
         setCloudRevision(payload.state.revision ?? null);
         setCloudStatus((current) => (current === "conflict" ? current : "synced"));
         setLastSyncedAt(new Date().toISOString());
@@ -675,12 +531,20 @@ export function usePlanningChecklist(params: {
     void flushCloudQueue();
   }, [cloudSyncEnabled, hasHydratedLocal, hasPendingQueuedItem, syncQueueKey]);
 
+  const hasCurrentQueuedItem = Boolean(currentQueuedItem);
+
   useEffect(() => {
-    if (!cloudSyncEnabled || !hasHydratedLocal || currentQueuedItem) {
+    if (!cloudSyncEnabled || !hasHydratedLocal || hasCurrentQueuedItem) {
       return;
     }
 
-    const nextUpdatedAt = new Date().toISOString();
+    const syncUpdatedAt = updatedAt || new Date().toISOString();
+    const syncPayloadKey = `${subjectId}:${area.id}:${syncUpdatedAt}:${cloudRevision ?? "none"}`;
+
+    if (lastSyncedPayloadKeyRef.current === syncPayloadKey) {
+      return;
+    }
+
     const timer = window.setTimeout(async () => {
       setCloudStatus("syncing");
 
@@ -691,7 +555,7 @@ export function usePlanningChecklist(params: {
           progressMap,
           subjectId,
           teacherNotes,
-          updatedAt: nextUpdatedAt,
+          updatedAt: syncUpdatedAt,
         });
 
         if (response.status === 409) {
@@ -700,7 +564,7 @@ export function usePlanningChecklist(params: {
               progressMap: { ...progressMap },
               revision: cloudRevision,
               teacherNotes,
-              updatedAt: nextUpdatedAt,
+              updatedAt: syncUpdatedAt,
             },
             responsePayload,
           );
@@ -720,11 +584,11 @@ export function usePlanningChecklist(params: {
             if (typeof window !== "undefined") {
               const currentQueue = parsePlanningSyncQueue(window.localStorage.getItem(syncQueueKey));
               const queuedItem =
-                currentQueue.find((item) => isCurrentScope(item, currentScope)) ??
+                currentQueue.find((item) => isPlanningScopeMatch(item, currentScope)) ??
                 createPlanningSyncQueueItem({
                   areaId: area.id,
                   baseRevision: cloudRevision,
-                  enqueuedAt: nextUpdatedAt,
+                  enqueuedAt: syncUpdatedAt,
                   progressMap: conflictState.localState.progressMap,
                   revision: cloudRevision,
                   subjectId,
@@ -735,7 +599,7 @@ export function usePlanningChecklist(params: {
               const nextQueue = upsertPlanningSyncItem(
                 currentQueue,
                 markPlanningSyncItemConflict(queuedItem, {
-                  attemptedAt: nextUpdatedAt,
+                  attemptedAt: syncUpdatedAt,
                   conflictState,
                   errorMessage: responsePayload.error,
                 }),
@@ -762,7 +626,7 @@ export function usePlanningChecklist(params: {
             revision: cloudRevision,
             subjectId,
             teacherNotes,
-            updatedAt: nextUpdatedAt,
+            updatedAt: syncUpdatedAt,
           });
           appendSyncLog("Lagt i synkkö för senare försök.");
           return;
@@ -776,11 +640,13 @@ export function usePlanningChecklist(params: {
           }
         }
 
+        const nextRevision = responsePayload.state?.revision ?? cloudRevision;
+        lastSyncedPayloadKeyRef.current = `${subjectId}:${area.id}:${syncUpdatedAt}:${nextRevision ?? "none"}`;
         setPendingConflict(null);
-        setCloudRevision(responsePayload.state?.revision ?? cloudRevision);
-        setUpdatedAt(nextUpdatedAt);
+        setCloudRevision(nextRevision);
+        setUpdatedAt(syncUpdatedAt);
         setCloudStatus("synced");
-        setLastSyncedAt(nextUpdatedAt);
+        setLastSyncedAt(syncUpdatedAt);
         appendSyncLog("Cloudsync sparning klar.");
       } catch {
         setCloudStatus("error");
@@ -792,35 +658,26 @@ export function usePlanningChecklist(params: {
           revision: cloudRevision,
           subjectId,
           teacherNotes,
-          updatedAt: nextUpdatedAt,
+          updatedAt: syncUpdatedAt,
         });
         appendSyncLog("Lagt i synkkö för senare försök.");
       }
-    }, 700);
+    }, 1700);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [area, cloudRevision, cloudSyncEnabled, currentQueuedItem, hasHydratedLocal, progressMap, subjectId, teacherNotes]);
+  }, [
+    area.id,
+    cloudRevision,
+    cloudSyncEnabled,
+    hasCurrentQueuedItem,
+    hasHydratedLocal,
+    subjectId,
+    updatedAt,
+  ]);
 
   const gapAnalysis = useMemo(() => analyzeChecklistGap(area, progressMap), [area, progressMap]);
-
-  const setItemStatus = (itemId: string, status: ChecklistStatus) => {
-    setProgressMap((current) => ({ ...current, [itemId]: status }));
-    setUpdatedAt(new Date().toISOString());
-  };
-
-  const resetChecklist = () => {
-    const nextMap = getDefaultStatusMap(area);
-    setProgressMap(nextMap);
-    setTeacherNotes("");
-    setUpdatedAt(new Date().toISOString());
-  };
-
-  const updateTeacherNotes = (value: string) => {
-    setTeacherNotes(value);
-    setUpdatedAt(new Date().toISOString());
-  };
 
   const retryCloudSync = () => {
     appendSyncLog("Manuell sync-retry startad.");
@@ -840,7 +697,7 @@ export function usePlanningChecklist(params: {
     strategy: "server" | "merged" | "local",
   ) => {
     const queueItem = queuedItems.find(
-      (item) => isCurrentScope(item, target) && item.status === "conflict" && item.conflictState,
+      (item) => isPlanningScopeMatch(item, target) && item.status === "conflict" && item.conflictState,
     );
 
     if (!queueItem?.conflictState) {

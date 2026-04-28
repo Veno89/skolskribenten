@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { DraftingHeader } from "@/components/drafting/DraftingHeader";
+import { DraftingOnboardingPanel } from "@/components/drafting/DraftingOnboardingPanel";
 import { OutputPanel } from "@/components/drafting/OutputPanel";
 import { GdprNameInput } from "@/components/gdpr/GdprNameInput";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
     customNames,
     hasSavedDraft,
     rawInput,
+    replaceDraft,
     savedAtLabel,
     selectedTemplate,
     switchTemplate,
@@ -66,6 +68,14 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
     resetGenerationState();
   };
 
+  const handleUseOnboardingSample = (sample: {
+    input: string;
+    template: typeof selectedTemplate;
+  }) => {
+    replaceDraft(sample.template, sample.input);
+    resetGenerationState();
+  };
+
   const handleGenerate = async () => {
     await generateDocument({
       customNames,
@@ -86,6 +96,13 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
 
       <div className="flex flex-1 flex-col lg:flex-row">
         <div className="flex w-full flex-col border-b border-[var(--ss-neutral-200)] lg:w-1/2 lg:border-b-0 lg:border-r">
+          <DraftingOnboardingPanel
+            hasSavedDraft={hasSavedDraft}
+            onDismiss={resetGenerationState}
+            onUseSample={handleUseOnboardingSample}
+            userId={userProfile.id}
+          />
+
           <div className="border-b border-[var(--ss-neutral-100)] bg-white px-4 py-3">
             <div className="flex items-center justify-between gap-4">
               <div>

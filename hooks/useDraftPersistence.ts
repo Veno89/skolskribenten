@@ -195,10 +195,25 @@ export function useDraftPersistence(userId: string) {
     }));
   };
 
+  const replaceDraft = (template: TemplateType, nextInput: string, nextCustomNames: string[] = []) => {
+    setSelectedTemplate(template);
+    setRawInput(nextInput);
+    setCustomNames(nextCustomNames);
+    setDraftsByTemplate((currentDrafts) => ({
+      ...currentDrafts,
+      [template]: {
+        rawInput: nextInput,
+        customNames: nextCustomNames,
+        savedAt: nextInput.trim() || nextCustomNames.length > 0 ? new Date().toISOString() : null,
+      },
+    }));
+  };
+
   return {
     clearActiveDraft,
     customNames,
     hasSavedDraft,
+    replaceDraft,
     rawInput,
     savedAtLabel,
     selectedTemplate,
