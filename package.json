@@ -19,7 +19,7 @@
     "support:retention:repair": "node scripts/retention-support.mjs --repair"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@radix-ui/react-slot": "^1.2.3",
     "@sentry/nextjs": "^10.50.0",
     "@supabase/ssr": "^0.10.2",
