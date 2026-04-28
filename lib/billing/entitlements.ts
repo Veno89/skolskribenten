@@ -5,6 +5,7 @@ export const PAID_TRANSFORM_LIMIT = 100;
 export const MONTHLY_PRO_PRICE_SEK = 49;
 export const ONE_TIME_PASS_PRICE_SEK = 49;
 export const ONE_TIME_PASS_DURATION_DAYS = 30;
+export const PAST_DUE_GRACE_PERIOD_DAYS = 7;
 
 export const STRIPE_SUBSCRIPTION_STATUSES = [
   "trialing",
@@ -44,29 +45,70 @@ export interface EntitlementDecision {
 
 export interface StripeSubscriptionEntitlementDecision {
   active: boolean;
+  paidAccessUntil: string | null;
   reason: string;
+}
+
+function parseDate(value: Date | string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export function getStripeSubscriptionEntitlementDecision(
   status: StripeSubscriptionStatus,
+  options: {
+    now?: Date;
+    pastDueSince?: Date | string | null;
+  } = {},
 ): StripeSubscriptionEntitlementDecision {
   switch (status) {
     case "trialing":
-      return { active: true, reason: "stripe_subscription_trialing" };
+      return { active: true, paidAccessUntil: null, reason: "stripe_subscription_trialing" };
     case "active":
-      return { active: true, reason: "stripe_subscription_active" };
-    case "past_due":
-      return { active: false, reason: "stripe_subscription_past_due_strict_no_grace" };
+      return { active: true, paidAccessUntil: null, reason: "stripe_subscription_active" };
+    case "past_due": {
+      const pastDueSince = parseDate(options.pastDueSince);
+
+      if (!pastDueSince) {
+        return {
+          active: false,
+          paidAccessUntil: null,
+          reason: "stripe_subscription_past_due_missing_grace_anchor",
+        };
+      }
+
+      const now = options.now ?? new Date();
+      const graceEndsAt = new Date(pastDueSince);
+      graceEndsAt.setUTCDate(graceEndsAt.getUTCDate() + PAST_DUE_GRACE_PERIOD_DAYS);
+
+      if (now < graceEndsAt) {
+        return {
+          active: true,
+          paidAccessUntil: graceEndsAt.toISOString(),
+          reason: "stripe_subscription_past_due_grace_period",
+        };
+      }
+
+      return {
+        active: false,
+        paidAccessUntil: null,
+        reason: "stripe_subscription_past_due_grace_expired",
+      };
+    }
     case "unpaid":
-      return { active: false, reason: "stripe_subscription_unpaid" };
+      return { active: false, paidAccessUntil: null, reason: "stripe_subscription_unpaid" };
     case "canceled":
-      return { active: false, reason: "stripe_subscription_canceled" };
+      return { active: false, paidAccessUntil: null, reason: "stripe_subscription_canceled" };
     case "paused":
-      return { active: false, reason: "stripe_subscription_paused" };
+      return { active: false, paidAccessUntil: null, reason: "stripe_subscription_paused" };
     case "incomplete":
-      return { active: false, reason: "stripe_subscription_incomplete" };
+      return { active: false, paidAccessUntil: null, reason: "stripe_subscription_incomplete" };
     case "incomplete_expired":
-      return { active: false, reason: "stripe_subscription_incomplete_expired" };
+      return { active: false, paidAccessUntil: null, reason: "stripe_subscription_incomplete_expired" };
   }
 }
 
@@ -157,13 +199,28 @@ export function getAuthoritativeEntitlementDecision(
   }
 
   if (entitlement.source === "recurring_subscription") {
+    if (entitlement.paid_access_until) {
+      const recurringGraceEndsAt = new Date(entitlement.paid_access_until);
+
+      if (Number.isNaN(recurringGraceEndsAt.getTime()) || recurringGraceEndsAt <= now) {
+        return {
+          accessLevel: "free",
+          active: false,
+          source: "recurring_subscription",
+          reason: "authoritative_recurring_grace_expired",
+          recurring: true,
+          paidAccessUntil: entitlement.paid_access_until,
+        };
+      }
+    }
+
     return {
       accessLevel: "pro",
       active: true,
       source: "recurring_subscription",
       reason: entitlement.reason || "authoritative_recurring_pro_active",
       recurring: true,
-      paidAccessUntil: null,
+      paidAccessUntil: entitlement.paid_access_until,
     };
   }
 

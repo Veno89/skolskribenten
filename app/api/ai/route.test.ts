@@ -245,7 +245,7 @@ describe("/api/ai", () => {
     );
   });
 
-  it("returns non-blocking output guard warnings in headers and usage metadata", async () => {
+  it("records non-blocking output guard warnings in usage metadata", async () => {
     mockAnthropicStream.mockResolvedValue(
       (async function* streamChunks() {
         yield {
@@ -274,10 +274,7 @@ describe("/api/ai", () => {
     );
 
     expect(response.status).toBe(200);
-    const warnings = JSON.parse(
-      response.headers.get("x-skolskribenten-output-warnings") ?? "[]",
-    ) as string[];
-    expect(warnings).toEqual(expect.arrayContaining([expect.stringContaining("[Elev 1]")]));
+    await expect(response.text()).resolves.toBe("Eleven deltog aktivt i genomgÃ¥ngen.");
     expect(mockUsageInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         output_guard_passed: true,

@@ -300,6 +300,7 @@ export async function applySubscriptionProjection(
     eventCreatedAt: string;
     eventId: string;
     latestInvoiceId: string | null;
+    paidAccessUntil?: string | null;
     priceId: string | null;
     reconciledAt?: string | null;
     status: string;
@@ -316,6 +317,7 @@ export async function applySubscriptionProjection(
       p_event_created_at: params.eventCreatedAt,
       p_event_id: params.eventId,
       p_latest_invoice_id: params.latestInvoiceId,
+      p_paid_access_until: params.paidAccessUntil ?? null,
       p_reconciled_at: params.reconciledAt ?? null,
       p_stripe_customer_id: params.customerId,
       p_stripe_price_id: params.priceId,

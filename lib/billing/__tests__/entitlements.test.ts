@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FREE_TRANSFORM_LIMIT,
   PAID_TRANSFORM_LIMIT,
+  PAST_DUE_GRACE_PERIOD_DAYS,
   formatEntitlementEndDate,
   getAuthoritativeEntitlementDecision,
   getCurrentPlanLabel,
@@ -94,8 +95,43 @@ describe("billing entitlements", () => {
       ),
     ).toMatchObject({
       active: true,
+      paidAccessUntil: null,
       recurring: true,
       reason: "stripe_subscription_active",
+      source: "recurring_subscription",
+    });
+
+    expect(
+      getAuthoritativeEntitlementDecision(
+        {
+          access_level: "pro",
+          paid_access_until: "2026-04-24T12:00:00.000Z",
+          reason: "stripe_subscription_past_due_grace_period",
+          source: "recurring_subscription",
+        },
+        NOW,
+      ),
+    ).toMatchObject({
+      active: true,
+      paidAccessUntil: "2026-04-24T12:00:00.000Z",
+      reason: "stripe_subscription_past_due_grace_period",
+      source: "recurring_subscription",
+    });
+
+    expect(
+      getAuthoritativeEntitlementDecision(
+        {
+          access_level: "pro",
+          paid_access_until: "2026-04-18T12:00:00.000Z",
+          reason: "stripe_subscription_past_due_grace_period",
+          source: "recurring_subscription",
+        },
+        NOW,
+      ),
+    ).toMatchObject({
+      active: false,
+      paidAccessUntil: "2026-04-18T12:00:00.000Z",
+      reason: "authoritative_recurring_grace_expired",
       source: "recurring_subscription",
     });
 
@@ -119,14 +155,50 @@ describe("billing entitlements", () => {
   it.each([
     ["trialing", true, "stripe_subscription_trialing"],
     ["active", true, "stripe_subscription_active"],
-    ["past_due", false, "stripe_subscription_past_due_strict_no_grace"],
     ["unpaid", false, "stripe_subscription_unpaid"],
     ["canceled", false, "stripe_subscription_canceled"],
     ["paused", false, "stripe_subscription_paused"],
     ["incomplete", false, "stripe_subscription_incomplete"],
     ["incomplete_expired", false, "stripe_subscription_incomplete_expired"],
   ] as const)("maps Stripe %s subscriptions to exact entitlement behavior", (status, active, reason) => {
-    expect(getStripeSubscriptionEntitlementDecision(status)).toEqual({ active, reason });
+    expect(getStripeSubscriptionEntitlementDecision(status)).toEqual({
+      active,
+      paidAccessUntil: null,
+      reason,
+    });
+  });
+
+  it("keeps past_due subscriptions active during a 7-day grace period", () => {
+    expect(PAST_DUE_GRACE_PERIOD_DAYS).toBe(7);
+    expect(
+      getStripeSubscriptionEntitlementDecision("past_due", {
+        now: new Date("2026-04-25T12:00:00.000Z"),
+        pastDueSince: "2026-04-19T12:00:00.000Z",
+      }),
+    ).toEqual({
+      active: true,
+      paidAccessUntil: "2026-04-26T12:00:00.000Z",
+      reason: "stripe_subscription_past_due_grace_period",
+    });
+  });
+
+  it("expires past_due grace after 7 days or when no anchor exists", () => {
+    expect(
+      getStripeSubscriptionEntitlementDecision("past_due", {
+        now: new Date("2026-04-27T12:00:00.000Z"),
+        pastDueSince: "2026-04-19T12:00:00.000Z",
+      }),
+    ).toEqual({
+      active: false,
+      paidAccessUntil: null,
+      reason: "stripe_subscription_past_due_grace_expired",
+    });
+
+    expect(getStripeSubscriptionEntitlementDecision("past_due")).toEqual({
+      active: false,
+      paidAccessUntil: null,
+      reason: "stripe_subscription_past_due_missing_grace_anchor",
+    });
   });
 
   it("detects when the free limit has been reached", () => {

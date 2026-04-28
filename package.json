@@ -10,8 +10,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "lint": "next lint",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "billing:reconcile": "node scripts/reconcile-stripe.mjs",
     "billing:reconcile:repair": "node scripts/reconcile-stripe.mjs --repair",
+    "db:types": "node scripts/generate-db-types.mjs",
     "ai:smoke": "node scripts/ai-smoke.mjs",
     "support:retention": "node scripts/retention-support.mjs",
     "support:retention:repair": "node scripts/retention-support.mjs --repair"
@@ -19,6 +21,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
     "@radix-ui/react-slot": "^1.2.3",
+    "@sentry/nextjs": "^10.50.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
     "class-variance-authority": "^0.7.1",
@@ -32,11 +35,16 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "jsdom": "^29.1.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",

@@ -206,15 +206,26 @@ Phase 2 notes:
 
 Features and quality improvements needed before a broader launch.
 
-- [ ] **Add component tests** — at minimum for `DraftingStation`, `OutputPanel`, and `DashboardNav` using React Testing Library
-- [ ] **Add E2E tests** — Playwright tests for the core flow: login → select template → paste notes → generate → copy
-- [ ] **Implement AI streaming** — return a `ReadableStream` from the AI route and consume with a streaming hook on the client for real-time output
-- [ ] **Add error tracking** — integrate Sentry or similar for client + server error capture
-- [ ] **Expand the GDPR name list** — add common non-Swedish names (Arabic, Somali, Finnish, etc.) commonly found in Swedish schools
-- [ ] **Consider Swish for monthly subscriptions** — check Stripe documentation for Swish as a recurring payment method
-- [ ] **Add `past_due` grace period** — make a conscious business decision and implement if desired
-- [ ] **Add CAPTCHA to support form** — if anonymous submissions are allowed, add bot protection
-- [ ] **Document `types/database.ts` generation** — add a script for `supabase gen types` or similar
+- [x] **Add component tests** — at minimum for `DraftingStation`, `OutputPanel`, and `DashboardNav` using React Testing Library
+- [x] **Add E2E tests** — Playwright tests for the core flow: login → select template → paste notes → generate → copy
+- [x] **Implement AI streaming** — return a `ReadableStream` from the AI route and consume with a streaming hook on the client for real-time output
+- [x] **Add error tracking** — integrate Sentry or similar for client + server error capture
+- [x] **Expand the GDPR name list** — add common non-Swedish names (Arabic, Somali, Finnish, etc.) commonly found in Swedish schools
+- [x] **Consider Swish for monthly subscriptions** — check Stripe documentation for Swish as a recurring payment method
+- [x] **Add `past_due` grace period** — make a conscious business decision and implement if desired
+- [x] **Add CAPTCHA to support form** — if anonymous submissions are allowed, add bot protection
+- [x] **Document `types/database.ts` generation** — add a script for `supabase gen types` or similar
+
+Phase 3 notes:
+
+- Added jsdom/React Testing Library coverage for `DraftingStation`, `OutputPanel`, and `DashboardNav`; Playwright now has a credential-gated core flow spec for login → template → notes → generation → copy.
+- `/api/ai` now returns a streamed text response while preserving first-chunk output-guard blocking and usage recording.
+- Sentry is wired through `instrumentation.ts`, `instrumentation-client.ts`, `app/global-error.tsx`, and `withSentryConfig`; set `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` plus Sentry org/project vars in production.
+- GDPR first-pass name coverage now includes common Arabic, Somali, Finnish, and other multicultural names.
+- Stripe's payment-method support documentation checked on April 28, 2026: Swish remains unsupported for Checkout subscription mode in this integration, so monthly checkout stays card-only while one-time payment keeps Swish.
+- `past_due` now has a 7-day grace period anchored to the latest invoice creation time, stored as `paid_access_until` for recurring entitlements and enforced by the authoritative entitlement decision.
+- Support submissions can use Cloudflare Turnstile (`NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`), with production failing closed if bot protection is missing.
+- Added `npm run db:types` via `scripts/generate-db-types.mjs` and documented both `SUPABASE_PROJECT_ID` and `SUPABASE_DB_URL` regeneration paths.
 
 ---
 

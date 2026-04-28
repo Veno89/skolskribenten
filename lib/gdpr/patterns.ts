@@ -167,11 +167,78 @@ export const COMMON_SWEDISH_NAMES_NEUTRAL = [
   "Skye",
 ] as const;
 
+export const COMMON_MULTICULTURAL_NAMES_ARABIC = [
+  "Aisha",
+  "Ali",
+  "Amir",
+  "Amina",
+  "Fatima",
+  "Hassan",
+  "Layla",
+  "Mariam",
+  "Mohamed",
+  "Mohammad",
+  "Mohammed",
+  "Nour",
+  "Omar",
+  "Yasin",
+  "Yusuf",
+  "Zainab",
+] as const;
+
+export const COMMON_MULTICULTURAL_NAMES_SOMALI = [
+  "Abdi",
+  "Abdullahi",
+  "Ayan",
+  "Farah",
+  "Hodan",
+  "Ibrahim",
+  "Ifrah",
+  "Ilhan",
+  "Ismail",
+  "Khadra",
+  "Nimco",
+  "Safiya",
+] as const;
+
+export const COMMON_MULTICULTURAL_NAMES_FINNISH = [
+  "Aino",
+  "Eero",
+  "Eino",
+  "Emmi",
+  "Iida",
+  "Juhani",
+  "Kaisa",
+  "Noora",
+  "Onni",
+  "Sari",
+  "Tuomas",
+  "Veeti",
+] as const;
+
+export const COMMON_MULTICULTURAL_NAMES_OTHER = [
+  "Anastasia",
+  "Elena",
+  "Ivan",
+  "Lejla",
+  "Maja",
+  "Mila",
+  "Milos",
+  "Nadia",
+  "Nikolai",
+  "Sofia",
+  "Zara",
+] as const;
+
 export const ALL_SWEDISH_NAMES = Array.from(
   new Set([
     ...COMMON_SWEDISH_NAMES_MASCULINE,
     ...COMMON_SWEDISH_NAMES_FEMININE,
     ...COMMON_SWEDISH_NAMES_NEUTRAL,
+    ...COMMON_MULTICULTURAL_NAMES_ARABIC,
+    ...COMMON_MULTICULTURAL_NAMES_SOMALI,
+    ...COMMON_MULTICULTURAL_NAMES_FINNISH,
+    ...COMMON_MULTICULTURAL_NAMES_OTHER,
   ]),
 );
 

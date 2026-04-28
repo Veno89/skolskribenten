@@ -12,6 +12,7 @@ import {
   isDuplicateSupportRequest,
   isSupportHoneypotTriggered,
 } from "@/lib/support/abuse-protection";
+import { verifySupportCaptcha } from "@/lib/support/captcha";
 import {
   detectSupportSensitiveContent,
   formatSupportSensitiveContentMessage,
@@ -42,6 +43,15 @@ function getHoneypotValue(body: unknown): unknown {
   return (body as Record<string, unknown>).website;
 }
 
+function getClientIp(req: NextRequest): string | null {
+  return (
+    req.headers.get("cf-connecting-ip") ??
+    req.headers.get("x-real-ip") ??
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    null
+  );
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
   const context = createRouteContext(req, "support");
   let body: unknown;
@@ -62,6 +72,17 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!parsed.success) {
     return jsonWithContext(
       { error: parsed.error.issues[0]?.message ?? "Ogiltig förfrågan." },
+      { status: 400 },
+      context,
+    );
+  }
+
+  const captchaResult = await verifySupportCaptcha(parsed.data.captchaToken, getClientIp(req));
+
+  if (!captchaResult.ok) {
+    logRouteInfo(context, "Rejected support submission that failed bot protection.");
+    return jsonWithContext(
+      { error: captchaResult.error ?? "Bot-skyddet kunde inte verifieras." },
       { status: 400 },
       context,
     );

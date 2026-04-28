@@ -1,6 +1,7 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+import Script from "next/script";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,20 +9,46 @@ import { SUPPORT_TOPICS } from "@/lib/support/schema";
 
 const RECIPIENT = "kontakt@skolskribenten.com";
 
+declare global {
+  interface Window {
+    __skolskribentenTurnstileError?: () => void;
+    __skolskribentenTurnstileExpired?: () => void;
+    __skolskribentenTurnstileSuccess?: (token: string) => void;
+    turnstile?: {
+      reset: () => void;
+    };
+  }
+}
+
 type SubmissionState =
   | { status: "idle" }
   | { status: "success"; message: string }
   | { status: "error"; message: string };
 
 export function ContactForm(): JSX.Element {
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const [topic, setTopic] = useState<(typeof SUPPORT_TOPICS)[number]>("Allmän fråga");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionState, setSubmissionState] = useState<SubmissionState>({ status: "idle" });
+  const captchaRequired = Boolean(turnstileSiteKey);
+
+  useEffect(() => {
+    window.__skolskribentenTurnstileSuccess = (token: string) => setCaptchaToken(token);
+    window.__skolskribentenTurnstileExpired = () => setCaptchaToken("");
+    window.__skolskribentenTurnstileError = () => setCaptchaToken("");
+
+    return () => {
+      delete window.__skolskribentenTurnstileSuccess;
+      delete window.__skolskribentenTurnstileExpired;
+      delete window.__skolskribentenTurnstileError;
+    };
+  }, []);
 
   const resetForm = () => {
     setTopic("Allmän fråga");
@@ -30,6 +57,8 @@ export function ContactForm(): JSX.Element {
     setRole("");
     setMessage("");
     setWebsite("");
+    setCaptchaToken("");
+    window.turnstile?.reset();
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -45,6 +74,7 @@ export function ContactForm(): JSX.Element {
         },
         body: JSON.stringify({
           email,
+          captchaToken,
           message,
           name,
           role,
@@ -189,9 +219,30 @@ export function ContactForm(): JSX.Element {
           e-postklient. Skriv inte elevnamn, personnummer eller fulla råanteckningar här. Du kan
           fortfarande skriva direkt till {RECIPIENT} om du föredrar vanlig e-post.
         </p>
-        <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
-          {isSubmitting ? "Skickar..." : "Skicka meddelande"}
-        </Button>
+        <div className="flex flex-col items-start gap-3 md:items-end">
+          {turnstileSiteKey ? (
+            <>
+              <Script
+                src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+                strategy="lazyOnload"
+              />
+              <div
+                className="cf-turnstile"
+                data-sitekey={turnstileSiteKey}
+                data-callback="__skolskribentenTurnstileSuccess"
+                data-expired-callback="__skolskribentenTurnstileExpired"
+                data-error-callback="__skolskribentenTurnstileError"
+              />
+            </>
+          ) : null}
+          <Button
+            type="submit"
+            className="rounded-full px-6"
+            disabled={isSubmitting || (captchaRequired && !captchaToken)}
+          >
+            {isSubmitting ? "Skickar..." : "Skicka meddelande"}
+          </Button>
+        </div>
       </div>
 
       {submissionState.status === "success" ? (

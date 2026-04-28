@@ -82,6 +82,16 @@ function getLatestInvoiceId(subscription: Stripe.Subscription): string | null {
   return getId(subscription.latest_invoice);
 }
 
+function getLatestInvoiceCreatedAt(subscription: Stripe.Subscription): string | null {
+  const latestInvoice = subscription.latest_invoice;
+
+  if (typeof latestInvoice !== "object" || !latestInvoice) {
+    return null;
+  }
+
+  return typeof latestInvoice.created === "number" ? stripeTimestampToIso(latestInvoice.created) : null;
+}
+
 function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): string | null {
   const timestamp = subscription.items.data[0]?.current_period_end;
   return typeof timestamp === "number" ? stripeTimestampToIso(timestamp) : null;
@@ -197,7 +207,11 @@ async function applySubscriptionFromStripe(
   const approvedPrice = priceId ? getStripePriceById(priceId) : null;
   const approvedSubscriptionPrice =
     approvedPrice?.mode === "subscription" && subscription.items.data.length === 1;
-  const baseDecision = getStripeSubscriptionEntitlementDecision(subscription.status);
+  const eventCreatedAt = stripeTimestampToIso(event.created);
+  const baseDecision = getStripeSubscriptionEntitlementDecision(subscription.status, {
+    now: new Date(eventCreatedAt),
+    pastDueSince: getLatestInvoiceCreatedAt(subscription) ?? eventCreatedAt,
+  });
   const entitlementActive = baseDecision.active && approvedSubscriptionPrice;
   const entitlementReason = entitlementActive
     ? baseDecision.reason
@@ -211,9 +225,10 @@ async function applySubscriptionFromStripe(
     customerId,
     entitlementActive,
     entitlementReason,
-    eventCreatedAt: stripeTimestampToIso(event.created),
+    eventCreatedAt,
     eventId: event.id,
     latestInvoiceId: getLatestInvoiceId(subscription),
+    paidAccessUntil: entitlementActive ? baseDecision.paidAccessUntil : null,
     priceId,
     status: subscription.status,
     subscriptionId: subscription.id,

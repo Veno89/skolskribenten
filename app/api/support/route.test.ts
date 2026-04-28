@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
@@ -6,6 +6,8 @@ const mockInsert = vi.fn();
 const mockSelect = vi.fn();
 const mockEq = vi.fn();
 const mockGte = vi.fn();
+const originalAppEnv = process.env.APP_ENV;
+const originalTurnstileSecret = process.env.TURNSTILE_SECRET_KEY;
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => ({
@@ -24,6 +26,9 @@ vi.mock("@/lib/supabase/admin", () => ({
 describe("/api/support", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    process.env.APP_ENV = "test";
+    delete process.env.TURNSTILE_SECRET_KEY;
 
     mockGetUser.mockResolvedValue({
       data: {
@@ -39,6 +44,22 @@ describe("/api/support", () => {
       insert: mockInsert,
       select: mockSelect,
     }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+
+    if (originalAppEnv === undefined) {
+      delete process.env.APP_ENV;
+    } else {
+      process.env.APP_ENV = originalAppEnv;
+    }
+
+    if (originalTurnstileSecret === undefined) {
+      delete process.env.TURNSTILE_SECRET_KEY;
+    } else {
+      process.env.TURNSTILE_SECRET_KEY = originalTurnstileSecret;
+    }
   });
 
   it("stores a support request and returns success", async () => {
@@ -133,6 +154,81 @@ describe("/api/support", () => {
       topic: "Allmän fråga",
       user_id: "user-123",
     });
+  });
+
+  it("verifies Turnstile when bot protection is configured", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "turnstile-secret";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { POST } = await import("@/app/api/support/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/support", {
+        body: JSON.stringify({
+          captchaToken: "turnstile-token-123",
+          email: "larare@skola.se",
+          message: "Jag undrar hur supportflödet fungerar för piloten.",
+          name: "Anna Andersson",
+          role: "",
+          topic: "Allmän fråga",
+        }),
+        headers: {
+          "x-forwarded-for": "203.0.113.10, 10.0.0.1",
+        },
+        method: "POST",
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      expect.objectContaining({
+        body: expect.any(FormData),
+        method: "POST",
+      }),
+    );
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects support requests when Turnstile verification fails", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "turnstile-secret";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: false }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      ),
+    );
+
+    const { POST } = await import("@/app/api/support/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/support", {
+        body: JSON.stringify({
+          captchaToken: "turnstile-token-123",
+          email: "larare@skola.se",
+          message: "Jag undrar hur supportflödet fungerar för piloten.",
+          name: "Anna Andersson",
+          role: "",
+          topic: "Allmän fråga",
+        }),
+        method: "POST",
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Bot-skyddet kunde inte verifieras. Försök igen.",
+    });
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it("rejects support messages that still contain obvious personal data", async () => {

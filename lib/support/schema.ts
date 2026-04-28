@@ -19,6 +19,10 @@ export const SUPPORT_TOPICS = [
 ] as const;
 
 export const SupportRequestSchema = z.object({
+  captchaToken: z.preprocess(
+    emptyStringToUndefined,
+    z.string().min(10, "Bot-skyddet saknar verifiering.").max(2048).optional(),
+  ),
   email: z.preprocess(
     trimString,
     z

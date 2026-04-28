@@ -497,8 +497,76 @@ describe("/api/webhooks/stripe", () => {
     );
   });
 
+  it("keeps past_due subscriptions active during the grace period", async () => {
+    mockConstructEvent.mockReturnValue(createEvent("customer.subscription.updated", { id: "sub_123" }));
+    mockSubscriptionRetrieve.mockResolvedValueOnce(
+      subscription({
+        latest_invoice: {
+          created: 1_745_193_600,
+          id: "in_123",
+        },
+        status: "past_due",
+      }),
+    );
+
+    const { POST } = await import("@/app/api/webhooks/stripe/route");
+    const response = await POST(
+      new Request("http://localhost/api/webhooks/stripe", {
+        method: "POST",
+        body: "{}",
+        headers: {
+          "stripe-signature": "valid",
+        },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "apply_subscription_projection",
+      expect.objectContaining({
+        p_entitlement_active: true,
+        p_entitlement_reason: "stripe_subscription_past_due_grace_period",
+        p_paid_access_until: expect.any(String),
+        p_stripe_status: "past_due",
+      }),
+    );
+  });
+
+  it("revokes past_due subscriptions after the grace period expires", async () => {
+    mockConstructEvent.mockReturnValue(createEvent("customer.subscription.updated", { id: "sub_123" }));
+    mockSubscriptionRetrieve.mockResolvedValueOnce(
+      subscription({
+        latest_invoice: {
+          created: 1_744_502_400,
+          id: "in_123",
+        },
+        status: "past_due",
+      }),
+    );
+
+    const { POST } = await import("@/app/api/webhooks/stripe/route");
+    const response = await POST(
+      new Request("http://localhost/api/webhooks/stripe", {
+        method: "POST",
+        body: "{}",
+        headers: {
+          "stripe-signature": "valid",
+        },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "apply_subscription_projection",
+      expect.objectContaining({
+        p_entitlement_active: false,
+        p_entitlement_reason: "stripe_subscription_past_due_grace_expired",
+        p_stripe_status: "past_due",
+      }),
+    );
+  });
+
   it.each([
-    ["past_due", "stripe_subscription_past_due_strict_no_grace"],
     ["unpaid", "stripe_subscription_unpaid"],
     ["canceled", "stripe_subscription_canceled"],
     ["paused", "stripe_subscription_paused"],

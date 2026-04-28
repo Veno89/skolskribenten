@@ -1,3 +1,4 @@
+import React from "react";
 import { describe, expect, it } from "vitest";
 import { parseDocument, renderInlineContent } from "../document-parser";
 
@@ -96,77 +97,51 @@ Slut på rapport.
   describe("renderInlineContent", () => {
     it("renders plain text", () => {
       const result = renderInlineContent("Vanlig text");
-      expect(result).toMatchInlineSnapshot(`
-        [
-          <React.Fragment>
-            Vanlig text
-          </React.Fragment>,
-        ]
-      `);
+      const fragment = result[0] as React.ReactElement;
+
+      expect(result).toHaveLength(1);
+      expect(fragment.type).toBe(React.Fragment);
+      expect(fragment.props.children).toBe("Vanlig text");
     });
 
     it("renders bold text using **", () => {
       const result = renderInlineContent("Text med **fetstil**");
-      expect(result).toMatchInlineSnapshot(`
-        [
-          <React.Fragment>
-            Text med 
-          </React.Fragment>,
-          <strong
-            className="font-semibold text-[var(--ss-neutral-900)]"
-          >
-            <React.Fragment>
-              fetstil
-            </React.Fragment>
-          </strong>,
-        ]
-      `);
+      const leadingText = result[0] as React.ReactElement;
+      const bold = result[1] as React.ReactElement;
+      const boldChild = React.Children.toArray(bold.props.children)[0] as React.ReactElement;
+
+      expect(leadingText.props.children).toBe("Text med ");
+      expect(bold.type).toBe("strong");
+      expect(bold.props.className).toContain("font-semibold");
+      expect(boldChild.props.children).toBe("fetstil");
     });
 
     it("renders GDPR entities like [Elev 1] distinctively", () => {
       const result = renderInlineContent("Det var [Elev 1] som kastade.");
-      expect(result).toMatchInlineSnapshot(`
-        [
-          <React.Fragment>
-            Det var 
-          </React.Fragment>,
-          <span
-            className="mx-0.5 inline-flex rounded-full border border-[var(--ss-primary)]/20 bg-[var(--ss-primary-light)] px-2.5 py-0.5 text-[0.82rem] font-semibold text-[var(--ss-primary-dark)]"
-          >
-            [Elev 1]
-          </span>,
-          <React.Fragment>
-             som kastade.
-          </React.Fragment>,
-        ]
-      `);
+      const leadingText = result[0] as React.ReactElement;
+      const placeholder = result[1] as React.ReactElement;
+      const trailingText = result[2] as React.ReactElement;
+
+      expect(leadingText.props.children).toBe("Det var ");
+      expect(placeholder.type).toBe("span");
+      expect(placeholder.props.className).toContain("rounded-full");
+      expect(placeholder.props.children).toBe("[Elev 1]");
+      expect(trailingText.props.children).toBe(" som kastade.");
     });
 
     it("combines multiple formatting types", () => {
       const result = renderInlineContent("**[Elev 1]** gjorde nåt **bra**");
-      expect(result).toMatchInlineSnapshot(`
-        [
-          <strong
-            className="font-semibold text-[var(--ss-neutral-900)]"
-          >
-            <span
-              className="mx-0.5 inline-flex rounded-full border border-[var(--ss-primary)]/20 bg-[var(--ss-primary-light)] px-2.5 py-0.5 text-[0.82rem] font-semibold text-[var(--ss-primary-dark)]"
-            >
-              [Elev 1]
-            </span>
-          </strong>,
-          <React.Fragment>
-             gjorde nåt 
-          </React.Fragment>,
-          <strong
-            className="font-semibold text-[var(--ss-neutral-900)]"
-          >
-            <React.Fragment>
-              bra
-            </React.Fragment>
-          </strong>,
-        ]
-      `);
+      const firstBold = result[0] as React.ReactElement;
+      const middleText = result[1] as React.ReactElement;
+      const secondBold = result[2] as React.ReactElement;
+      const placeholder = React.Children.toArray(firstBold.props.children)[0] as React.ReactElement;
+      const secondBoldText = React.Children.toArray(secondBold.props.children)[0] as React.ReactElement;
+
+      expect(firstBold.type).toBe("strong");
+      expect(placeholder.type).toBe("span");
+      expect(placeholder.props.children).toBe("[Elev 1]");
+      expect(middleText.props.children).toBe(" gjorde nåt ");
+      expect(secondBoldText.props.children).toBe("bra");
     });
   });
 });

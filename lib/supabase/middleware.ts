@@ -9,15 +9,16 @@ const AUTH_ROUTES = ["/logga-in", "/registrera"] as const;
 function applySecurityHeaders(response: NextResponse): NextResponse {
   const isDevelopment = process.env.NODE_ENV !== "production";
   const scriptSrc = isDevelopment
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
-    : "script-src 'self' 'unsafe-inline';";
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com;"
+    : "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;";
   const connectSrc = isDevelopment
-    ? "connect-src 'self' ws: wss: https://*.supabase.co https://api.anthropic.com https://api.stripe.com;"
-    : "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.stripe.com;";
+    ? "connect-src 'self' ws: wss: https://*.supabase.co https://api.anthropic.com https://api.stripe.com https://challenges.cloudflare.com;"
+    : "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.stripe.com https://challenges.cloudflare.com;";
+  const frameSrc = "frame-src 'self' https://challenges.cloudflare.com;";
   const assetSrc = "img-src 'self' data: blob:; font-src 'self' data:;";
   const objectSrc = isDevelopment ? "object-src 'self' data:;" : "object-src 'none';";
   const upgradeInsecureRequests = isDevelopment ? "" : "upgrade-insecure-requests;";
-  const enforcedCsp = `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; ${scriptSrc} style-src 'self' 'unsafe-inline'; ${assetSrc} ${objectSrc} ${connectSrc} ${upgradeInsecureRequests}`.trim();
+  const enforcedCsp = `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; ${scriptSrc} style-src 'self' 'unsafe-inline'; ${assetSrc} ${objectSrc} ${connectSrc} ${frameSrc} ${upgradeInsecureRequests}`.trim();
 
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");

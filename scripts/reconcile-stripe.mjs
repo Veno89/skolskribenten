@@ -3,6 +3,7 @@ import Stripe from "stripe";
 
 const repair = process.argv.includes("--repair");
 const now = new Date().toISOString();
+const pastDueGracePeriodMs = 7 * 24 * 60 * 60 * 1000;
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -18,15 +19,59 @@ function getAdminKey() {
   return process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
-function isActiveSubscription(status) {
-  return status === "active" || status === "trialing";
-}
+function subscriptionDecision(status, approvedPrice, pastDueSince) {
+  if (!approvedPrice) {
+    return {
+      active: false,
+      paidAccessUntil: null,
+      reason: "reconcile_unapproved_subscription_price",
+    };
+  }
+  if (status === "active") {
+    return {
+      active: true,
+      paidAccessUntil: null,
+      reason: "reconcile_stripe_subscription_active",
+    };
+  }
+  if (status === "trialing") {
+    return {
+      active: true,
+      paidAccessUntil: null,
+      reason: "reconcile_stripe_subscription_trialing",
+    };
+  }
+  if (status === "past_due") {
+    if (!pastDueSince) {
+      return {
+        active: false,
+        paidAccessUntil: null,
+        reason: "reconcile_stripe_subscription_past_due_missing_grace_anchor",
+      };
+    }
 
-function subscriptionReason(status, approvedPrice) {
-  if (!approvedPrice) return "reconcile_unapproved_subscription_price";
-  if (status === "active") return "reconcile_stripe_subscription_active";
-  if (status === "trialing") return "reconcile_stripe_subscription_trialing";
-  return `reconcile_stripe_subscription_${status}`;
+    const graceEndsAt = new Date(pastDueSince).getTime() + pastDueGracePeriodMs;
+
+    if (new Date(now).getTime() < graceEndsAt) {
+      return {
+        active: true,
+        paidAccessUntil: new Date(graceEndsAt).toISOString(),
+        reason: "reconcile_stripe_subscription_past_due_grace_period",
+      };
+    }
+
+    return {
+      active: false,
+      paidAccessUntil: null,
+      reason: "reconcile_stripe_subscription_past_due_grace_expired",
+    };
+  }
+
+  return {
+    active: false,
+    paidAccessUntil: null,
+    reason: `reconcile_stripe_subscription_${status}`,
+  };
 }
 
 function getSubscriptionPriceId(subscription) {
@@ -42,6 +87,12 @@ function getLatestInvoiceId(subscription) {
   const invoice = subscription.latest_invoice;
   if (!invoice) return null;
   return typeof invoice === "string" ? invoice : invoice.id;
+}
+
+function getLatestInvoiceCreatedAt(subscription) {
+  const invoice = subscription.latest_invoice;
+  if (!invoice || typeof invoice === "string" || typeof invoice.created !== "number") return null;
+  return new Date(invoice.created * 1000).toISOString();
 }
 
 const stripeSecretKey = requiredEnv("STRIPE_SECRET_KEY");
@@ -99,15 +150,20 @@ for (const mapping of mappings ?? []) {
 
   const priceId = getSubscriptionPriceId(subscription);
   const approvedPrice = priceId === monthlyPriceId;
-  const entitlementActive = isActiveSubscription(subscription.status) && approvedPrice;
+  const decision = subscriptionDecision(
+    subscription.status,
+    approvedPrice,
+    getLatestInvoiceCreatedAt(subscription),
+  );
   const payload = {
     p_cancel_at_period_end: subscription.cancel_at_period_end,
     p_current_period_end: getCurrentPeriodEnd(subscription),
-    p_entitlement_active: entitlementActive,
-    p_entitlement_reason: subscriptionReason(subscription.status, approvedPrice),
+    p_entitlement_active: decision.active,
+    p_entitlement_reason: decision.reason,
     p_event_created_at: now,
     p_event_id: `reconcile:${subscription.id}:${Date.now()}`,
     p_latest_invoice_id: getLatestInvoiceId(subscription),
+    p_paid_access_until: decision.active ? decision.paidAccessUntil : null,
     p_reconciled_at: now,
     p_stripe_customer_id: mapping.stripe_customer_id,
     p_stripe_price_id: priceId,
@@ -118,7 +174,7 @@ for (const mapping of mappings ?? []) {
 
   console.log(JSON.stringify({
     approvedPrice,
-    entitlementActive,
+    entitlementActive: decision.active,
     repair,
     status: subscription.status,
     stripeCustomerId: mapping.stripe_customer_id,

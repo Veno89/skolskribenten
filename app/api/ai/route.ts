@@ -11,7 +11,6 @@ import {
   releaseGenerationAttempt,
 } from "@/lib/ai/generation";
 import {
-  serializeOutputGuardWarnings,
   validateAiOutput,
 } from "@/lib/ai/output-guard";
 import { classifyAiProviderError } from "@/lib/ai/provider-errors";
@@ -46,6 +45,94 @@ const RequestSchema = z.object({
 
 type RouteContext = ReturnType<typeof createRouteContext>;
 type AdminClient = ReturnType<typeof createAdminClient>;
+type ClaudeStream = Awaited<ReturnType<Anthropic["messages"]["stream"]>>;
+type ClaudeStreamChunk = ClaudeStream extends AsyncIterable<infer Chunk> ? Chunk : never;
+type ClaudeStreamIterator = AsyncIterator<ClaudeStreamChunk>;
+
+const OUTPUT_GUARD_BLOCKED_MESSAGE =
+  "AI-svaret stoppades eftersom det kan innehålla personuppgifter eller nya elevmarkörer. Försök igen med tydligare avidentifierat underlag.";
+
+function getTextDelta(chunk: ClaudeStreamChunk): string | null {
+  const maybeChunk = chunk as {
+    delta?: { text?: unknown; type?: unknown };
+    type?: unknown;
+  };
+
+  if (
+    maybeChunk.type === "content_block_delta" &&
+    maybeChunk.delta?.type === "text_delta" &&
+    typeof maybeChunk.delta.text === "string"
+  ) {
+    return maybeChunk.delta.text;
+  }
+
+  return null;
+}
+
+async function readNextTextDelta(
+  iterator: ClaudeStreamIterator,
+): Promise<{ done: true } | { done: false; text: string }> {
+  while (true) {
+    const nextChunk = await iterator.next();
+
+    if (nextChunk.done) {
+      return { done: true };
+    }
+
+    const text = getTextDelta(nextChunk.value);
+
+    if (text) {
+      return { done: false, text };
+    }
+  }
+}
+
+async function recordBlockedOutput(params: {
+  adminSupabase: AdminClient;
+  clientReportedPiiTokensRemoved: number;
+  context: RouteContext;
+  effectiveScrubbedInput: string;
+  generatedText: string;
+  governanceMetadata: ReturnType<typeof getAiGovernanceMetadata>;
+  outputGuardResult?: ReturnType<typeof validateAiOutput>;
+  reservedTransform: boolean;
+  templateType: z.infer<typeof RequestSchema>["templateType"];
+  totalPiiTokensRemoved: number;
+  userId: string;
+}): Promise<void> {
+  const outputGuardResult =
+    params.outputGuardResult ??
+    validateAiOutput({
+      inputText: params.effectiveScrubbedInput,
+      outputText: params.generatedText,
+    });
+
+  if (params.reservedTransform) {
+    await releaseGenerationAttempt(params.adminSupabase, params.userId, params.context);
+  }
+
+  await recordUsageEvent({
+    adminSupabase: params.adminSupabase,
+    clientReportedPiiTokensRemoved: params.clientReportedPiiTokensRemoved,
+    context: params.context,
+    governanceMetadata: params.governanceMetadata,
+    outputGuardPassed: false,
+    outputGuardWarnings: [
+      ...outputGuardResult.blockingReasons,
+      ...outputGuardResult.warnings,
+    ],
+    templateType: params.templateType,
+    totalPiiTokensRemoved: params.totalPiiTokensRemoved,
+    userId: params.userId,
+  });
+
+  logRouteInfo(params.context, "Blocked AI output during streaming validation.", {
+    blockingReasonCount: outputGuardResult.blockingReasons.length,
+    outputPlaceholderCount: outputGuardResult.outputPlaceholders.length,
+    requiredPlaceholderCount: outputGuardResult.requiredPlaceholders.length,
+    warningCount: outputGuardResult.warnings.length,
+  });
+}
 
 function buildAttemptFailureResponse(context: RouteContext, reason: string): Response {
   switch (reason) {
@@ -160,9 +247,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   const systemPrompt = getSystemPrompt(templateType, { userSettings });
   const governanceMetadata = getAiGovernanceMetadata();
   let generatedText = "";
+  let claudeStream: ClaudeStream;
+  let iterator!: ClaudeStreamIterator;
+  let initialTextChunk = "";
 
   try {
-    const claudeStream = await anthropic.messages.stream(
+    claudeStream = await anthropic.messages.stream(
       {
         model: CLAUDE_PRIMARY_MODEL,
         max_tokens: 2048,
@@ -179,10 +269,12 @@ export async function POST(req: NextRequest): Promise<Response> {
       },
     );
 
-    for await (const chunk of claudeStream) {
-      if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
-        generatedText += chunk.delta.text;
-      }
+    iterator = claudeStream[Symbol.asyncIterator]();
+    const initialDelta = await readNextTextDelta(iterator);
+
+    if (!initialDelta.done) {
+      initialTextChunk = initialDelta.text;
+      generatedText = initialTextChunk;
     }
   } catch (error) {
     if (reservedTransform) {
@@ -205,41 +297,29 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
-  const outputGuardResult = validateAiOutput({
+  const initialOutputGuardResult = validateAiOutput({
     inputText: effectiveScrubbedInput,
     outputText: generatedText,
   });
 
-  if (!outputGuardResult.passed) {
-    if (reservedTransform) {
-      await releaseGenerationAttempt(adminSupabase, user.id, context);
-    }
-
-    await recordUsageEvent({
+  if (!initialOutputGuardResult.passed) {
+    await recordBlockedOutput({
       adminSupabase,
       clientReportedPiiTokensRemoved,
       context,
+      effectiveScrubbedInput,
+      generatedText,
       governanceMetadata,
-      outputGuardPassed: false,
-      outputGuardWarnings: [
-        ...outputGuardResult.blockingReasons,
-        ...outputGuardResult.warnings,
-      ],
+      outputGuardResult: initialOutputGuardResult,
+      reservedTransform,
       templateType,
       totalPiiTokensRemoved,
       userId: user.id,
     });
 
-    logRouteInfo(context, "Blocked AI output after post-generation validation.", {
-      blockingReasonCount: outputGuardResult.blockingReasons.length,
-      outputPlaceholderCount: outputGuardResult.outputPlaceholders.length,
-      requiredPlaceholderCount: outputGuardResult.requiredPlaceholders.length,
-      warningCount: outputGuardResult.warnings.length,
-    });
-
     return jsonWithContext(
       {
-        error: "AI-svaret stoppades eftersom det kan innehålla personuppgifter eller nya elevmarkörer. Försök igen med tydligare avidentifierat underlag.",
+        error: OUTPUT_GUARD_BLOCKED_MESSAGE,
         code: "OUTPUT_GUARD_BLOCKED",
       },
       { status: 502 },
@@ -247,32 +327,108 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
-  await recordUsageEvent({
-    adminSupabase,
-    clientReportedPiiTokensRemoved,
-    context,
-    governanceMetadata,
-    outputGuardPassed: true,
-    outputGuardWarnings: outputGuardResult.warnings,
-    templateType,
-    totalPiiTokensRemoved,
-    userId: user.id,
-  });
-
   const responseHeaders = new Headers({
     "Content-Type": "text/plain; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store, no-cache, must-revalidate",
     "X-Skolskribenten-Output-Guard": "passed",
   });
-  const serializedWarnings = serializeOutputGuardWarnings(outputGuardResult.warnings);
+  const encoder = new TextEncoder();
+  const responseStream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        if (initialTextChunk) {
+          controller.enqueue(encoder.encode(initialTextChunk));
+        }
 
-  if (serializedWarnings) {
-    responseHeaders.set("X-Skolskribenten-Output-Warnings", serializedWarnings);
-  }
+        while (true) {
+          const nextDelta = await readNextTextDelta(iterator);
+
+          if (nextDelta.done) {
+            break;
+          }
+
+          const nextGeneratedText = generatedText + nextDelta.text;
+          const outputGuardResult = validateAiOutput({
+            inputText: effectiveScrubbedInput,
+            outputText: nextGeneratedText,
+          });
+
+          if (!outputGuardResult.passed) {
+            await recordBlockedOutput({
+              adminSupabase,
+              clientReportedPiiTokensRemoved,
+              context,
+              effectiveScrubbedInput,
+              generatedText: nextGeneratedText,
+              governanceMetadata,
+              outputGuardResult,
+              reservedTransform,
+              templateType,
+              totalPiiTokensRemoved,
+              userId: user.id,
+            });
+            controller.error(new Error(OUTPUT_GUARD_BLOCKED_MESSAGE));
+            return;
+          }
+
+          generatedText = nextGeneratedText;
+          controller.enqueue(encoder.encode(nextDelta.text));
+        }
+
+        const outputGuardResult = validateAiOutput({
+          inputText: effectiveScrubbedInput,
+          outputText: generatedText,
+        });
+
+        if (!outputGuardResult.passed) {
+          await recordBlockedOutput({
+            adminSupabase,
+            clientReportedPiiTokensRemoved,
+            context,
+            effectiveScrubbedInput,
+            generatedText,
+            governanceMetadata,
+            outputGuardResult,
+            reservedTransform,
+            templateType,
+            totalPiiTokensRemoved,
+            userId: user.id,
+          });
+          controller.error(new Error(OUTPUT_GUARD_BLOCKED_MESSAGE));
+          return;
+        }
+
+        await recordUsageEvent({
+          adminSupabase,
+          clientReportedPiiTokensRemoved,
+          context,
+          governanceMetadata,
+          outputGuardPassed: true,
+          outputGuardWarnings: outputGuardResult.warnings,
+          templateType,
+          totalPiiTokensRemoved,
+          userId: user.id,
+        });
+        controller.close();
+      } catch (error) {
+        if (reservedTransform) {
+          await releaseGenerationAttempt(adminSupabase, user.id, context);
+        }
+
+        const classifiedError = classifyAiProviderError(error);
+        logRouteError(context, "AI provider stream failed.", error, {
+          aiErrorCode: classifiedError.code,
+          aiErrorStatus: classifiedError.status,
+          timeoutMs: AI_GENERATION_TIMEOUT_MS,
+        });
+        controller.error(new Error(classifiedError.userMessage));
+      }
+    },
+  });
 
   return withRequestContext(
-    new Response(generatedText, {
+    new Response(responseStream, {
       headers: responseHeaders,
     }),
     context,

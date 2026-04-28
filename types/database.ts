@@ -718,6 +718,7 @@ export interface Database {
           p_event_created_at: string;
           p_event_id: string;
           p_latest_invoice_id: string | null;
+          p_paid_access_until?: string | null;
           p_reconciled_at?: string | null;
           p_stripe_customer_id: string;
           p_stripe_price_id: string | null;

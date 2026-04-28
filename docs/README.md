@@ -19,3 +19,17 @@ This folder is the active documentation set for Skolskribenten. It intentionally
 - Keep `roadmap.md` short; move detailed runbooks into `operations.md`, `billing-security.md`, or `ai-governance.md`.
 - Do not add archive prompts, speculative product briefs, or stale design snapshots to this folder.
 - When a document stops describing the live app, update it or delete it.
+
+## Generated Database Types
+
+`types/database.ts` is generated from Supabase. Refresh it after schema changes with:
+
+```bash
+SUPABASE_PROJECT_ID=your-project-ref npm run db:types
+```
+
+For local or CI environments that use a direct database connection instead of a project ref:
+
+```bash
+SUPABASE_DB_URL=postgresql://... npm run db:types
+```

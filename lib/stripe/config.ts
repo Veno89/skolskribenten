@@ -94,6 +94,7 @@ export function getStripePrices(): Record<StripePriceKey, StripePriceConfig> {
     monthly: {
       key: "monthly",
       mode: "subscription",
+      // Stripe currently documents Swish as single-use and unsupported for Checkout subscription mode.
       paymentMethodTypes: ["card"],
       priceId: parseEnv(PriceIdSchema, "STRIPE_PRICE_MONTHLY_PRO"),
     },

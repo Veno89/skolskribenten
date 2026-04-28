@@ -16,6 +16,27 @@ describe("GdprScrubber", () => {
     expect(result.stats.namesReplaced).toBe(1);
   });
 
+  it("replaces common Arabic names without teacher-provided custom names", () => {
+    const result = new GdprScrubber().scrub("Fatima räckte upp handen och Yusuf lyssnade.");
+
+    expect(result.scrubbedText).toBe("[Elev 1] räckte upp handen och [Elev 2] lyssnade.");
+    expect(result.stats.namesReplaced).toBe(2);
+  });
+
+  it("replaces common Somali names even when they appear sentence-initially once", () => {
+    const result = new GdprScrubber().scrub("Ayan arbetade fokuserat.");
+
+    expect(result.scrubbedText).toBe("[Elev 1] arbetade fokuserat.");
+    expect(result.unmatchedCapitalized).toEqual([]);
+  });
+
+  it("replaces common Finnish names used in Swedish classrooms", () => {
+    const result = new GdprScrubber().scrub("Aino och Onni samarbetade i gruppen.");
+
+    expect(result.scrubbedText).toBe("[Elev 1] och [Elev 2] samarbetade i gruppen.");
+    expect(result.stats.namesReplaced).toBe(2);
+  });
+
   it("replaces personnummer in YYYYMMDD-XXXX format", () => {
     const result = new GdprScrubber().scrub("Elevens nummer är 20160203-1234.");
 
