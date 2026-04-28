@@ -7,8 +7,8 @@ import {
 import { loadDashboardProfile } from "@/lib/dashboard/load-dashboard-profile";
 
 export const metadata: Metadata = {
-  title: "InstÃ¤llningar",
-  description: "Anpassa skolnivÃ¥, ton och kontoinformation fÃ¶r dina AI-utkast.",
+  title: "Inställningar",
+  description: "Anpassa skolnivå, ton och kontoinformation för dina AI-utkast.",
 };
 
 interface Props {

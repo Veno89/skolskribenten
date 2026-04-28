@@ -130,6 +130,8 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
           </div>
 
           <textarea
+            id="drafting-input"
+            aria-label="Anteckningar som ska omvandlas till pedagogisk dokumentation"
             className="min-h-[24rem] flex-1 resize-none bg-[var(--ss-neutral-50)] px-4 py-5 text-sm leading-7 text-[var(--ss-neutral-900)] placeholder:text-[var(--ss-neutral-300)] focus:outline-none"
             placeholder={selectedTemplateInfo.placeholder}
             value={rawInput}

@@ -8,5 +8,7 @@ coverage/
 dist/
 out/
 pnpm-debug.log*
+dev-stderr.log
+dev-stdout.log
 dev-*.log
 *.tsbuildinfo

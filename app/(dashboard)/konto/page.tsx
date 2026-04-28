@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { KontoClient } from "@/app/(dashboard)/konto/KontoClient";
+import { MissingProfileState } from "@/components/dashboard/MissingProfileState";
 import {
   formatEntitlementEndDate,
   getAuthoritativeEntitlementDecision,
@@ -25,6 +26,11 @@ interface Props {
 
 export default async function KontoPage({ searchParams }: Props): Promise<JSX.Element> {
   const { profile } = await loadDashboardProfile({ nextPath: "/konto" });
+
+  if (!profile) {
+    return <MissingProfileState />;
+  }
+
   const supabase = createClient();
   const entitlementCheckedAt = new Date();
   const { data: entitlement } = await supabase
@@ -32,7 +38,7 @@ export default async function KontoPage({ searchParams }: Props): Promise<JSX.El
     .select(
       "access_level, source, reason, paid_access_until, stripe_subscription_id, stripe_checkout_session_id, last_stripe_event_id, last_reconciled_at",
     )
-    .eq("user_id", profile!.id)
+    .eq("user_id", profile.id)
     .maybeSingle();
 
   const paymentParam = Array.isArray(searchParams?.payment)
@@ -42,11 +48,11 @@ export default async function KontoPage({ searchParams }: Props): Promise<JSX.El
     paymentParam === "success" || paymentParam === "cancelled" ? paymentParam : null;
   const authoritativeDecision = entitlement
     ? getAuthoritativeEntitlementDecision(entitlement, entitlementCheckedAt)
-    : getEntitlementDecision(profile!, entitlementCheckedAt);
+    : getEntitlementDecision(profile, entitlementCheckedAt);
   const isPro = authoritativeDecision.active;
   const isRecurringPlan = authoritativeDecision.recurring;
   const entitlementProfile = {
-    ...profile!,
+    ...profile,
     subscription_end_date:
       authoritativeDecision.source === "one_time_pass" ? authoritativeDecision.paidAccessUntil : null,
     subscription_status: authoritativeDecision.active ? "pro" as const : "free" as const,
@@ -71,7 +77,7 @@ export default async function KontoPage({ searchParams }: Props): Promise<JSX.El
             localAccessLevel: authoritativeDecision.accessLevel,
             localSource: authoritativeDecision.source,
             stripeCheckoutSessionId: entitlement?.stripe_checkout_session_id ?? null,
-            stripeCustomerId: profile!.stripe_customer_id,
+            stripeCustomerId: profile.stripe_customer_id,
             stripeSubscriptionId: entitlement?.stripe_subscription_id ?? null,
           },
         }}
