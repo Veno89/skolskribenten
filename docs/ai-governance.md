@@ -1,19 +1,21 @@
 # AI Governance Operations
 
-Last updated: April 27, 2026.
+Last updated: April 28, 2026.
 
 This document describes the current AI generation control plane. It is an operational contract, not a guarantee that the model can never produce bad text.
 
 ## Request State Model
 
 1. Browser scrubber removes known names and structural identifiers before `/api/ai`.
-2. Server scrubber runs again on the submitted text.
+2. Server scrubber runs again on the submitted text, using the user's safe capitalized words.
 3. Server sensitive-content guard rejects obvious remaining personal data before generation.
 4. Quota/rate-limit reservation is created through the generation-attempt RPC.
 5. Anthropic generation runs with the server-owned prompt/model configuration and a server timeout.
-6. The server assembles the generated text and runs the output guard before returning it.
-7. If the output guard blocks, the reserved transform is released, a non-content usage event is recorded, and no generated text is returned.
-8. If the output guard passes, a non-content usage event is recorded and the text is returned with optional warning headers.
+6. The server waits for the first generated text chunk, validates it with the output guard, then starts streaming text to the browser.
+7. Each later chunk is appended to the accumulated generated text and checked by the output guard before it is sent.
+8. If the output guard blocks before streaming starts, the reserved transform is released, a non-content usage event is recorded, and no generated text is returned.
+9. If the output guard blocks mid-stream, the stream errors, the reserved transform is released when needed, and a non-content usage event is recorded.
+10. If the output guard passes through the full stream, a non-content usage event is recorded, non-blocking warnings are stored as metadata, and the text is returned.
 
 ## Usage Metadata
 
@@ -57,8 +59,9 @@ Current coverage proves:
 - fixture prompts keep critical clauses
 - required placeholders are tracked
 - obvious personal data in generated output blocks response delivery
-- non-blocking warnings reach the browser and usage metadata
+- non-blocking warnings reach usage metadata
 - blocked output releases the reserved transform
+- generated content streams as text chunks while preserving first-chunk output blocking behavior
 - provider timeout classification returns a safe error without spending the reserved transform
 
 ## Operations
@@ -89,6 +92,8 @@ When changing prompt behavior or guard rules:
 
 - The eval baseline is synthetic and small; it is a regression tripwire, not a comprehensive safety proof.
 - The output guard can produce false positives and false negatives.
+- Mid-stream blocking may leave a partial response visible before the browser sees the stream error; teacher review is still mandatory.
+- Streaming responses do not currently surface non-blocking guard warnings back to the browser; add a warning delivery channel if those need to appear live in the drafting panel.
 - The live provider smoke test still needs to be wired into the release workflow.
 - Provider timeout/cancel/error classification is route-level and should be expanded into dashboards/alerts if provider incidents become frequent.
 - Teacher review remains required before copying or sending generated text.

@@ -1,8 +1,8 @@
 # Operations Runbook
 
-Last updated: April 27, 2026.
+Last updated: April 28, 2026.
 
-This document covers non-billing operations: support intake, planning sync, account lifecycle, data-rights handling, and security-header rollout. Billing-specific operations live in `docs/billing-security.md`. AI-specific operations live in `docs/ai-governance.md`.
+This document covers non-billing operations: support intake, planning sync, account lifecycle, data-rights handling, security headers, accessibility checks, and performance checks. Billing-specific operations live in `docs/billing-security.md`. AI-specific operations live in `docs/ai-governance.md`.
 
 ## Admin Access
 
@@ -41,6 +41,11 @@ Privacy rules:
 - Use `request_id` or row `id` when discussing a case.
 - Redact immediately if a message contains pupil names, personnummer, health details, incident details, or pasted classroom notes.
 - Route logs and notifications must not include raw support emails or message text.
+
+Bot protection:
+- `/api/support` verifies Cloudflare Turnstile when `TURNSTILE_SECRET_KEY` is configured.
+- Failed Turnstile verification must not create a support row.
+- Turnstile outage handling is a launch decision: disable the env var temporarily only if accepting more spam is safer than blocking support.
 
 Triage flow:
 1. Open `/admin/support?status=open`.
@@ -128,11 +133,63 @@ Do not copy user comments, support messages, or planning notes into external too
 
 Middleware applies:
 - enforced CSP with `frame-ancestors 'none'`
+- per-request script nonce and `strict-dynamic`
+- no script `unsafe-inline`
+- Cloudflare Turnstile script allowance for contact/support challenge rendering
+- `style-src 'self' 'unsafe-inline'` while the current Next.js/UI stack still emits inline styles
 - CSP report-only header pointing at `/api/csp-report`
 - baseline browser hardening headers
-- HSTS in production
+- HSTS in production only
 
-Use report-only findings to remove unsafe inline allowances gradually. Do not move to nonce/hash enforcement until Next.js runtime behavior and third-party scripts have been tested in staging.
+Operational rules:
+- Check `/api/csp-report` logs after adding new third-party scripts, frames, or network targets.
+- Do not add broad domains such as `https:` or wildcard script sources without a documented reason.
+- Keep the report-only header active as a detection channel even though the main policy is enforced.
+- Remove `style-src 'unsafe-inline'` only after testing the full app without inline style violations.
+
+## Server Action CSRF
+
+Mutating server actions validate the request `Origin` against the forwarded host and `NEXT_PUBLIC_APP_URL`.
+
+If valid users start seeing origin failures:
+1. Check the deployment proxy's `x-forwarded-proto` and `host` headers.
+2. Confirm `NEXT_PUBLIC_APP_URL` matches the public app origin exactly.
+3. Look for stale custom domains or preview URLs that are not expected to submit production mutations.
+
+Do not bypass origin checks in individual actions. Fix the deployment origin configuration instead.
+
+## Accessibility Checks
+
+Current coverage includes:
+- public-page Playwright accessibility smoke tests
+- skip link, semantic regions, and visible focus styles
+- labeled form controls on public pages and support intake
+- loading states that use `aria-busy` or live-region copy where long work is expected
+- keyboard-reachable primary flows in the public smoke coverage
+
+Run:
+
+```bash
+pnpm exec playwright test e2e/accessibility.spec.ts
+```
+
+Before broad launch, complete a manual pass with at least one screen reader setup such as NVDA/Firefox or VoiceOver/Safari. Pay special attention to drafting output warnings, billing/portal flows, planning sync conflict resolution, and admin tables.
+
+## Performance Checks
+
+The latest local production build snapshot from April 28, 2026:
+- `/lektionsplanering`: 1.62 kB route bundle, 162 kB first-load JS
+- `/skrivstation`: 14.2 kB route bundle, 212 kB first-load JS
+- admin routes: 371-373 B route bundles, 163 kB first-load JS
+- shared first-load JS: 160 kB
+
+Planning data is lazy-loaded in the workspace, so the full curriculum dataset is not part of the first render path.
+
+Before broad launch:
+- run production build size checks after major UI changes
+- capture Core Web Vitals in the deployed environment
+- test the authenticated drafting and planning flows on a mid-range mobile device
+- add alerting for provider/API latency if AI timeouts become visible to users
 
 ## Open Human Decisions
 

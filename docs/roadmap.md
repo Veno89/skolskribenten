@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 27, 2026.
+Last updated: April 28, 2026.
 
 This is the short operational roadmap. `docs/audit.md` is the detailed current risk register.
 
@@ -10,7 +10,8 @@ Landed:
 - support warnings and server-side sensitive-content rejection
 - lifecycle columns and hashed route logs
 - clear-all local data and sign-out cleanup
-- Settings privacy copy and planning import/export guardrails
+- settings privacy copy and planning import/export guardrails
+- per-user safe capitalized words for GDPR scrubber false positives
 
 Remaining:
 - local autosave setting
@@ -22,6 +23,7 @@ Remaining:
 Landed:
 - server-side `app_admins` allowlist
 - `/admin/support` queue with status filters, assignment, redaction, and soft deletion
+- Cloudflare Turnstile support for anonymous intake
 - sanitized support intake notifications through `OPS_ALERT_WEBHOOK_URL`
 - dry-run-first support retention tooling
 - consolidated operations runbook in `docs/operations.md`
@@ -38,6 +40,7 @@ Landed:
 - conditional writes and conflict audit rows
 - client replay queue support for revisions, conflict IDs, timestamps, and resolution strategy
 - `/admin/planning-sync` diagnostics without raw teacher notes
+- planning workspace lazy loading
 
 Remaining:
 - browser-flow tests for offline/online conflict resolution
@@ -49,7 +52,7 @@ Remaining:
 
 Landed:
 - `usage_events` AI provider/model/prompt/guard metadata
-- server-side output guard before returning generated text
+- streaming AI responses with incremental output-guard checks
 - blocked-output quota release
 - synthetic eval coverage
 - provider timeout/error classification
@@ -71,11 +74,13 @@ Landed:
 - `/admin/account-requests`
 - reduced registration enumeration
 - middleware protection for `/admin`
-- CSP `frame-ancestors 'none'`, report-only telemetry, and production HSTS
+- per-request nonce CSP without script `unsafe-inline`
+- server-action `Origin` validation
+- strengthened password policy and HaveIBeenPwned breached-password checks
+- public accessibility smoke coverage
 
 Remaining:
-- decide whether deletion can be automated for accounts without billing/retention blockers
+- decide whether deletion can be automated for accounts without billing or retention blockers
 - add session/device visibility or MFA if needed
 - add app-level auth throttling if Supabase controls are insufficient
-- move CSP toward nonce/hash enforcement
 - complete manual accessibility and live auth-security sign-off

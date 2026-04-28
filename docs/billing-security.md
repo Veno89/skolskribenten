@@ -1,10 +1,10 @@
 # Billing Security Model
 
-Last updated: April 26, 2026.
+Last updated: April 28, 2026.
 
 This document is the operating contract for account, Stripe billing, and entitlement state. Stripe is the payment source of truth. The local database is a durable, idempotent projection of Stripe state plus Skolskribenten's account entitlement decision.
 
-Stripe references used for this hardening pass:
+Stripe references used for the billing hardening pass:
 - Checkout fulfillment: https://docs.stripe.com/checkout/fulfillment
 - Webhook receiving and signature verification: https://docs.stripe.com/webhooks
 - Subscription webhook events and statuses: https://docs.stripe.com/billing/subscriptions/webhooks
@@ -39,7 +39,7 @@ Security rules:
 - Checkout and portal sessions are created server-side for the authenticated user.
 - Webhooks verify Stripe signatures with the raw body before any event processing.
 - Paid access changes only through verified Stripe webhooks, reconciliation repair, or future explicit admin flows.
-- Failure defaults to no paid access. There is currently no `past_due` grace period.
+- Failure defaults to no paid access except for the documented 7-day `past_due` grace window.
 
 ## Local Billing Projection
 
@@ -57,6 +57,8 @@ Tables added in `supabase/migrations/013_billing_hardening.sql`:
 - allows a stuck `processing` Stripe event to be reclaimed after a 5 minute worker-death timeout
 - keeps webhook ledger payloads intentionally minimal so Stripe customer details are not copied into local event storage
 
+`supabase/migrations/015_past_due_grace_period.sql` adds the bounded recurring-subscription grace model for `past_due` states.
+
 Concurrency is handled in database RPCs using row locks:
 - `record_stripe_customer_mapping`
 - `claim_stripe_event`
@@ -66,6 +68,12 @@ Concurrency is handled in database RPCs using row locks:
 - `apply_subscription_projection`
 
 `profiles.subscription_status`, `profiles.subscription_end_date`, and `profiles.stripe_customer_id` remain as the backwards-compatible app projection. They are updated from `account_entitlements`, not trusted as the source of payment truth for paid API gates, Checkout blocking, Customer Portal access, cloud sync, or generation quota.
+
+Runtime display/pricing configuration:
+- Stripe Price IDs still come from the approved Stripe price env vars used by Checkout.
+- App copy and local pass duration read `BILLING_MONTHLY_PRO_PRICE_SEK`, `BILLING_ONE_TIME_PASS_PRICE_SEK`, and `BILLING_ONE_TIME_PASS_DURATION_DAYS`.
+- Defaults are 49 SEK/month, 49 SEK one-time pass, and 30 days.
+- Invalid local pricing env values fail at runtime instead of silently showing misleading prices.
 
 ## State Machine
 
@@ -77,9 +85,9 @@ Account:
 - Entitled: only after a verified webhook or reconciliation repair applies the Stripe-derived state.
 
 One-time pass:
-- `checkout.session.completed` with `payment_status=paid`: grant 30 days.
+- `checkout.session.completed` with `payment_status=paid`: grant the configured pass duration, default 30 days.
 - `checkout.session.completed` with `payment_status=unpaid`: record session, no paid access.
-- `checkout.session.async_payment_succeeded`: grant 30 days.
+- `checkout.session.async_payment_succeeded`: grant the configured pass duration, default 30 days.
 - `checkout.session.async_payment_failed`: record failure, no paid access.
 - Expired local pass: `expire_one_time_passes` moves entitlement back to free/cancelled projection.
 - Missing `account_entitlements` row: no paid access. Migration `014` backfills rows and the signup trigger creates new free rows, so absence is treated as a fail-closed anomaly.
@@ -90,7 +98,7 @@ Recurring subscription:
 | --- | --- |
 | `trialing` | Pro active |
 | `active` | Pro active |
-| `past_due` | No paid access, strict no-grace policy |
+| `past_due` | Pro active during the 7-day grace period when a grace anchor exists; no paid access after grace expiry or if the anchor is missing |
 | `unpaid` | No paid access |
 | `canceled` | No paid access |
 | `paused` | No paid access |
@@ -128,7 +136,7 @@ After:
 - Webhook events are raw-body signature verified, claimed, processed, and completed in the event ledger.
 - Webhook processing validates approved prices and customer mapping before entitlement changes.
 - Checkout and subscription fulfillment require exactly one approved line item/price before paid access can be granted.
-- Async success/failure and subscription terminal/non-paying states fail closed.
+- Async failures and subscription terminal/non-paying states fail closed, with only the explicit `past_due` grace window preserved.
 - Portal sessions are created only for the authenticated user's own recurring customer and use a server-owned same-origin return URL.
 - Reconciliation can compare Stripe with local state and repair by applying the same subscription projection RPC.
 
@@ -189,20 +197,22 @@ Automated coverage added or updated:
 - Unknown/unapproved price IDs are rejected.
 - Mismatched customer/session/user trace data is rejected.
 - Failed/async payments do not grant access prematurely.
-- Canceled, unpaid, paused, incomplete, incomplete-expired, and past-due subscriptions revoke access.
+- `past_due` subscriptions remain active during the 7-day grace period and revoke when the grace period expires or no anchor exists.
+- Canceled, unpaid, paused, incomplete, and incomplete-expired subscriptions revoke access.
 - Portal route creates sessions only for the authenticated user's own recurring customer.
 - Missing Stripe price config fails safely.
+- Runtime display pricing rejects invalid local env values.
 - Checkout, portal, cloud sync, and generation quota use `account_entitlements` instead of trusting stale profile projection fields.
 - Webhook ledger persistence strips customer details from stored event payloads.
 
-Commands run locally on April 26, 2026:
-- `pnpm typecheck`
+Commands run locally on April 28, 2026:
 - `pnpm test`
+- `pnpm typecheck`
 - `pnpm build`
+- `pnpm exec playwright test e2e/accessibility.spec.ts`
 
 ## Residual Risks And Human Decisions
 
-- Business policy: `past_due` currently revokes immediately. This is safest financially but may be harsher than desired; decide whether a documented grace period should exist.
 - Stripe Customer Portal configuration must be kept aligned with approved product/price choices. If the portal allows switching to unapproved prices, webhooks will deny access for those subscriptions.
 - Live Stripe test-mode end-to-end verification is still required after applying migrations.
 - Reconciliation repair currently focuses on recurring subscriptions. One-time pass repair remains a manual support workflow.
