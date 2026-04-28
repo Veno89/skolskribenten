@@ -25,7 +25,11 @@ type SubmissionState =
   | { status: "success"; message: string }
   | { status: "error"; message: string };
 
-export function ContactForm(): JSX.Element {
+interface ContactFormProps {
+  nonce?: string;
+}
+
+export function ContactForm({ nonce }: ContactFormProps): JSX.Element {
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const [topic, setTopic] = useState<(typeof SUPPORT_TOPICS)[number]>("Allmän fråga");
   const [name, setName] = useState("");
@@ -223,6 +227,7 @@ export function ContactForm(): JSX.Element {
           {turnstileSiteKey ? (
             <>
               <Script
+                nonce={nonce}
                 src="https://challenges.cloudflare.com/turnstile/v0/api.js"
                 strategy="lazyOnload"
               />

@@ -37,6 +37,7 @@ export function useDocumentGeneration() {
   const generateDocument = async (params: {
     customNames: string[];
     rawInput: string;
+    safeCapitalizedWords?: string[];
     templateType: TemplateType;
   }) => {
     if (!params.rawInput.trim()) {
@@ -45,6 +46,7 @@ export function useDocumentGeneration() {
 
     const result = getScrubber().scrub(params.rawInput, {
       customNames: params.customNames,
+      safeCapitalizedWords: params.safeCapitalizedWords,
     });
 
     setScrubberStats(result.stats);

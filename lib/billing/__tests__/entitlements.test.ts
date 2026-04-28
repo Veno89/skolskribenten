@@ -250,6 +250,22 @@ describe("billing entitlements", () => {
         NOW,
       ),
     ).toBe("Pro - 100 omvandlingar per månad, 49 kr/mån");
+
+    expect(
+      getCurrentPlanLabel(
+        {
+          subscription_status: "pro",
+          subscription_end_date: "2026-05-01T00:00:00.000Z",
+          transforms_used_this_month: 2,
+        },
+        NOW,
+        {
+          monthlyProPriceSek: 79,
+          oneTimePassDurationDays: 45,
+          oneTimePassPriceSek: 59,
+        },
+      ),
+    ).toBe("45-dagarskort - 100 omvandlingar per månad i 45 dagar, 59 kr");
   });
 
   it("builds usage summaries for free and paid access", () => {

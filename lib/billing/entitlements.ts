@@ -1,10 +1,14 @@
+import {
+  DEFAULT_BILLING_PRICING_CONFIG,
+  type BillingPricingConfig,
+} from "@/lib/billing/pricing-config";
 import type { Profile } from "@/types";
 
 export const FREE_TRANSFORM_LIMIT = 10;
 export const PAID_TRANSFORM_LIMIT = 100;
-export const MONTHLY_PRO_PRICE_SEK = 49;
-export const ONE_TIME_PASS_PRICE_SEK = 49;
-export const ONE_TIME_PASS_DURATION_DAYS = 30;
+export const MONTHLY_PRO_PRICE_SEK = DEFAULT_BILLING_PRICING_CONFIG.monthlyProPriceSek;
+export const ONE_TIME_PASS_PRICE_SEK = DEFAULT_BILLING_PRICING_CONFIG.oneTimePassPriceSek;
+export const ONE_TIME_PASS_DURATION_DAYS = DEFAULT_BILLING_PRICING_CONFIG.oneTimePassDurationDays;
 export const PAST_DUE_GRACE_PERIOD_DAYS = 7;
 
 export const STRIPE_SUBSCRIPTION_STATUSES = [
@@ -371,14 +375,18 @@ export function formatEntitlementEndDate(
   return new Intl.DateTimeFormat(locale).format(date);
 }
 
-export function getCurrentPlanLabel(profile: EntitlementSnapshot, now: Date = new Date()): string {
+export function getCurrentPlanLabel(
+  profile: EntitlementSnapshot,
+  now: Date = new Date(),
+  pricing: BillingPricingConfig = DEFAULT_BILLING_PRICING_CONFIG,
+): string {
   if (!isActivePro(profile, now)) {
     return `Gratis - ${FREE_TRANSFORM_LIMIT} omvandlingar per månad`;
   }
 
   return profile.subscription_end_date === null
-    ? `Pro - ${PAID_TRANSFORM_LIMIT} omvandlingar per månad, ${MONTHLY_PRO_PRICE_SEK} kr/mån`
-    : `${ONE_TIME_PASS_DURATION_DAYS}-dagarskort - ${PAID_TRANSFORM_LIMIT} omvandlingar per månad i ${ONE_TIME_PASS_DURATION_DAYS} dagar, ${ONE_TIME_PASS_PRICE_SEK} kr`;
+    ? `Pro - ${PAID_TRANSFORM_LIMIT} omvandlingar per månad, ${pricing.monthlyProPriceSek} kr/mån`
+    : `${pricing.oneTimePassDurationDays}-dagarskort - ${PAID_TRANSFORM_LIMIT} omvandlingar per månad i ${pricing.oneTimePassDurationDays} dagar, ${pricing.oneTimePassPriceSek} kr`;
 }
 
 export function getUsageSummary(profile: EntitlementSnapshot, now: Date = new Date()): string {

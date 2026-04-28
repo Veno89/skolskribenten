@@ -110,6 +110,7 @@ describe("DraftingStation", () => {
     expect(mocks.generateDocument).toHaveBeenCalledWith({
       customNames: ["Amir"],
       rawInput: "Eleven tog hjälp av konkret material.",
+      safeCapitalizedWords: undefined,
       templateType: "larlogg",
     });
   });

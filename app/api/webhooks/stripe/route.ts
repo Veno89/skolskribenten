@@ -6,6 +6,7 @@ import {
   STRIPE_SUBSCRIPTION_STATUSES,
   type StripeSubscriptionStatus,
 } from "@/lib/billing/entitlements";
+import { getBillingPricingConfig } from "@/lib/billing/pricing";
 import {
   applyCheckoutSessionProjection,
   applySubscriptionProjection,
@@ -22,8 +23,6 @@ import {
 import { getStripePriceById, getStripeWebhookSecret } from "@/lib/stripe/config";
 import { createStripeClient } from "@/lib/stripe/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-const ONE_TIME_PASS_DAYS = 30;
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 type RouteContext = ReturnType<typeof createRouteContext>;
@@ -325,9 +324,10 @@ async function handleCheckoutSessionEvent(
     const paymentSucceeded =
       event.type === "checkout.session.async_payment_succeeded" ||
       (event.type === "checkout.session.completed" && session.payment_status === "paid");
+    const oneTimePassDurationDays = getBillingPricingConfig().oneTimePassDurationDays;
 
     accessUntil = paymentSucceeded
-      ? addDays(new Date(event.created * 1000), ONE_TIME_PASS_DAYS).toISOString()
+      ? addDays(new Date(event.created * 1000), oneTimePassDurationDays).toISOString()
       : null;
   }
 

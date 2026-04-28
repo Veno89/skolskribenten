@@ -197,7 +197,25 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const { scrubbedInput, scrubberStats, templateType } = parsed.data;
-  const serverScrubResult = serverScrubber.scrub(scrubbedInput);
+  const { data: settingsProfile, error: settingsError } = await supabase
+    .from("profiles")
+    .select("user_settings")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (settingsError) {
+    logRouteError(context, "Failed to load profile settings for server scrubber.", settingsError);
+    return jsonWithContext(
+      { error: "Kunde inte kontrollera dina skrivinställningar just nu." },
+      { status: 500 },
+      context,
+    );
+  }
+
+  const scrubbingUserSettings = parseUserSettings(settingsProfile?.user_settings);
+  const serverScrubResult = serverScrubber.scrub(scrubbedInput, {
+    safeCapitalizedWords: scrubbingUserSettings.safeCapitalizedWords,
+  });
   const effectiveScrubbedInput = serverScrubResult.scrubbedText;
   const potentialSensitiveContent = detectPotentialSensitiveContent(effectiveScrubbedInput);
 

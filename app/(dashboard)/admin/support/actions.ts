@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { buildPath } from "@/lib/auth/redirects";
 import {
+  isCurrentServerActionOriginValid,
+  SERVER_ACTION_ORIGIN_ERROR_MESSAGE,
+} from "@/lib/security/server-action-origin";
+import {
   SupportRequestActionSchema,
   SupportStatusActionSchema,
   buildSupportRequestRedactionUpdate,
@@ -33,6 +37,15 @@ function getFormString(formData: FormData, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function rejectInvalidSupportOrigin(statusFilter: string | undefined): void {
+  if (!isCurrentServerActionOriginValid()) {
+    redirectToSupportQueue({
+      error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE,
+      statusFilter,
+    });
+  }
+}
+
 async function requireSupportAdmin(statusFilter: string | undefined) {
   const context = await getSupportAdminContext(SUPPORT_ADMIN_PATH);
 
@@ -54,12 +67,14 @@ function logSupportAdminAction(
 }
 
 export async function updateSupportRequestStatusAction(formData: FormData): Promise<void> {
+  const statusFilter = getFormString(formData, "statusFilter");
+  rejectInvalidSupportOrigin(statusFilter);
+
   const parsed = SupportStatusActionSchema.safeParse({
     requestId: getFormString(formData, "requestId"),
     status: getFormString(formData, "status"),
-    statusFilter: getFormString(formData, "statusFilter"),
+    statusFilter,
   });
-  const statusFilter = getFormString(formData, "statusFilter");
 
   if (!parsed.success) {
     redirectToSupportQueue({
@@ -96,11 +111,13 @@ export async function updateSupportRequestStatusAction(formData: FormData): Prom
 }
 
 export async function assignSupportRequestToMeAction(formData: FormData): Promise<void> {
+  const statusFilter = getFormString(formData, "statusFilter");
+  rejectInvalidSupportOrigin(statusFilter);
+
   const parsed = SupportRequestActionSchema.safeParse({
     requestId: getFormString(formData, "requestId"),
-    statusFilter: getFormString(formData, "statusFilter"),
+    statusFilter,
   });
-  const statusFilter = getFormString(formData, "statusFilter");
 
   if (!parsed.success) {
     redirectToSupportQueue({
@@ -138,11 +155,13 @@ export async function assignSupportRequestToMeAction(formData: FormData): Promis
 }
 
 export async function redactSupportRequestAction(formData: FormData): Promise<void> {
+  const statusFilter = getFormString(formData, "statusFilter");
+  rejectInvalidSupportOrigin(statusFilter);
+
   const parsed = SupportRequestActionSchema.safeParse({
     requestId: getFormString(formData, "requestId"),
-    statusFilter: getFormString(formData, "statusFilter"),
+    statusFilter,
   });
-  const statusFilter = getFormString(formData, "statusFilter");
   const confirmed = getFormString(formData, "confirmed") === "yes";
 
   if (!parsed.success || !confirmed) {
@@ -179,11 +198,13 @@ export async function redactSupportRequestAction(formData: FormData): Promise<vo
 }
 
 export async function deleteSupportRequestAction(formData: FormData): Promise<void> {
+  const statusFilter = getFormString(formData, "statusFilter");
+  rejectInvalidSupportOrigin(statusFilter);
+
   const parsed = SupportRequestActionSchema.safeParse({
     requestId: getFormString(formData, "requestId"),
-    statusFilter: getFormString(formData, "statusFilter"),
+    statusFilter,
   });
-  const statusFilter = getFormString(formData, "statusFilter");
   const confirmed = getFormString(formData, "confirmed") === "yes";
 
   if (!parsed.success || !confirmed) {

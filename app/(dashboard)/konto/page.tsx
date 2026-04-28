@@ -10,6 +10,7 @@ import {
   getUsageSummary,
   hasExceededTransformLimit,
 } from "@/lib/billing/entitlements";
+import { getBillingPricingConfig } from "@/lib/billing/pricing";
 import { loadDashboardProfile } from "@/lib/dashboard/load-dashboard-profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,6 +33,7 @@ export default async function KontoPage({ searchParams }: Props): Promise<JSX.El
   }
 
   const supabase = createClient();
+  const pricing = getBillingPricingConfig();
   const entitlementCheckedAt = new Date();
   const { data: entitlement } = await supabase
     .from("account_entitlements")
@@ -63,10 +65,11 @@ export default async function KontoPage({ searchParams }: Props): Promise<JSX.El
       <KontoClient
         paymentStatus={paymentStatus}
         billingState={{
-          currentPlanLabel: getCurrentPlanLabel(entitlementProfile, entitlementCheckedAt),
+          currentPlanLabel: getCurrentPlanLabel(entitlementProfile, entitlementCheckedAt, pricing),
           isPro,
           isRecurringPlan,
           oneTimePassEndsAt: formatEntitlementEndDate(authoritativeDecision.paidAccessUntil),
+          pricing,
           quotaExceeded: hasExceededTransformLimit(entitlementProfile, entitlementCheckedAt),
           quotaExceededMessage: getQuotaExceededMessage(entitlementProfile, entitlementCheckedAt),
           usageSummary: getUsageSummary(entitlementProfile, entitlementCheckedAt),

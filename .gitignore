@@ -5,6 +5,8 @@ node_modules/
 .tmp/
 supabase/.temp/
 coverage/
+playwright-report/
+test-results/
 dist/
 out/
 pnpm-debug.log*

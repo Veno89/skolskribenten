@@ -1,7 +1,10 @@
+import { headers } from "next/headers";
 import { ContactForm } from "@/components/shared/ContactForm";
 import { ContentPageLayout } from "@/components/shared/ContentPageLayout";
 
 export default function KontaktPage(): JSX.Element {
+  const nonce = headers().get("x-nonce") ?? undefined;
+
   return (
     <ContentPageLayout
       eyebrow="Kontakt"
@@ -10,7 +13,7 @@ export default function KontaktPage(): JSX.Element {
     >
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <section className="ss-card p-8">
-          <ContactForm />
+          <ContactForm nonce={nonce} />
         </section>
 
         <aside className="space-y-6">

@@ -1,4 +1,5 @@
 import { KontoBillingActions } from "@/app/(dashboard)/konto/KontoBillingActions";
+import type { BillingPricingConfig } from "@/lib/billing/pricing-config";
 
 interface Props {
   billingState: {
@@ -16,6 +17,7 @@ interface Props {
     isPro: boolean;
     isRecurringPlan: boolean;
     oneTimePassEndsAt: string | null;
+    pricing: BillingPricingConfig;
     quotaExceeded: boolean;
     quotaExceededMessage: string;
     usageSummary: string;
@@ -30,6 +32,7 @@ export function KontoClient({ billingState, paymentStatus }: Props): JSX.Element
     isPro,
     isRecurringPlan,
     oneTimePassEndsAt,
+    pricing,
     quotaExceeded,
     quotaExceededMessage,
     usageSummary,
@@ -75,7 +78,7 @@ export function KontoClient({ billingState, paymentStatus }: Props): JSX.Element
 
         {isPro && !isRecurringPlan && oneTimePassEndsAt ? (
           <div className="mt-6 rounded-[1.25rem] border border-[var(--ss-secondary)] bg-[var(--ss-secondary-light)] px-4 py-3 text-sm text-[var(--ss-neutral-900)]">
-            Ditt 30-dagarskort Ã¤r aktivt till {oneTimePassEndsAt}. NÃ¤r perioden lÃ¶pt ut kan du vÃ¤lja
+            Ditt {pricing.oneTimePassDurationDays}-dagarskort Ã¤r aktivt till {oneTimePassEndsAt}. NÃ¤r perioden lÃ¶pt ut kan du vÃ¤lja
             ett nytt kort eller mÃ¥nadsabonnemang.
           </div>
         ) : null}
@@ -133,7 +136,7 @@ export function KontoClient({ billingState, paymentStatus }: Props): JSX.Element
         </details>
       </section>
 
-      <KontoBillingActions isPro={isPro} isRecurringPlan={isRecurringPlan} />
+      <KontoBillingActions isPro={isPro} isRecurringPlan={isRecurringPlan} pricing={pricing} />
     </div>
   );
 }

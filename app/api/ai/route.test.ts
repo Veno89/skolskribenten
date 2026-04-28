@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetUser = vi.fn();
+const mockServerFrom = vi.fn();
 const mockRpc = vi.fn();
 const mockFrom = vi.fn();
 const mockDetectPotentialSensitiveContent = vi.fn();
@@ -13,6 +14,7 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: {
       getUser: mockGetUser,
     },
+    from: mockServerFrom,
   }),
 }));
 
@@ -64,6 +66,24 @@ describe("/api/ai", () => {
 
     mockDetectPotentialSensitiveContent.mockReturnValue([]);
     mockFormatPotentialSensitiveContentMessage.mockReturnValue("Känsligt innehåll upptäcktes.");
+    mockServerFrom.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        const query = {
+          eq: vi.fn(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { user_settings: {} },
+            error: null,
+          }),
+          select: vi.fn(),
+        };
+        query.eq.mockReturnValue(query);
+        query.select.mockReturnValue(query);
+
+        return query;
+      }
+
+      throw new Error(`Unexpected server table: ${table}`);
+    });
     mockRpc.mockImplementation((fnName: string) => {
       if (fnName === "begin_generation_attempt") {
         return {

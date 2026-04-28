@@ -8,10 +8,15 @@ import {
   DEFAULT_POST_AUTH_REDIRECT,
   sanitizeNextPath,
 } from "@/lib/auth/redirects";
+import { getBreachedPasswordValidationError } from "@/lib/auth/breached-password";
 import {
   PASSWORD_REQUIREMENTS_MESSAGE,
   PasswordSchema,
 } from "@/lib/auth/password-policy";
+import {
+  isCurrentServerActionOriginValid,
+  SERVER_ACTION_ORIGIN_ERROR_MESSAGE,
+} from "@/lib/security/server-action-origin";
 import { getAppUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { getFirstIssue, getValue } from "@/lib/validations/helpers";
@@ -88,13 +93,17 @@ function redirectWithMessage(
 }
 
 export async function loginAction(formData: FormData): Promise<never> {
+  const next = sanitizeNextPath(getValue(formData, "next"), DEFAULT_POST_AUTH_REDIRECT);
+
+  if (!isCurrentServerActionOriginValid()) {
+    redirectWithMessage("/logga-in", { error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE, next });
+  }
+
   const parsed = SignInSchema.safeParse({
     email: getValue(formData, "email"),
     password: getValue(formData, "password"),
     next: getValue(formData, "next"),
   });
-
-  const next = sanitizeNextPath(getValue(formData, "next"), DEFAULT_POST_AUTH_REDIRECT);
 
   if (!parsed.success) {
     redirectWithMessage("/logga-in", { error: getFirstIssue(parsed.error), next });
@@ -123,6 +132,11 @@ export async function loginAction(formData: FormData): Promise<never> {
 export async function registerAction(formData: FormData): Promise<never> {
   const rawNext = getValue(formData, "next");
   const next = sanitizeNextPath(rawNext, DEFAULT_POST_AUTH_REDIRECT);
+
+  if (!isCurrentServerActionOriginValid()) {
+    redirectWithMessage("/registrera", { error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE, next });
+  }
+
   const parsed = SignUpSchema.safeParse({
     fullName: getValue(formData, "fullName"),
     schoolName: getValue(formData, "schoolName"),
@@ -134,6 +148,12 @@ export async function registerAction(formData: FormData): Promise<never> {
 
   if (!parsed.success) {
     redirectWithMessage("/registrera", { error: getFirstIssue(parsed.error), next });
+  }
+
+  const breachedPasswordError = await getBreachedPasswordValidationError(parsed.data.password);
+
+  if (breachedPasswordError) {
+    redirectWithMessage("/registrera", { error: breachedPasswordError, next });
   }
 
   const supabase = createClient();
@@ -174,12 +194,16 @@ export async function registerAction(formData: FormData): Promise<never> {
 }
 
 export async function resendConfirmationAction(formData: FormData): Promise<never> {
+  const next = sanitizeNextPath(getValue(formData, "next"), DEFAULT_POST_AUTH_REDIRECT);
+
+  if (!isCurrentServerActionOriginValid()) {
+    redirectWithMessage("/logga-in", { error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE, next });
+  }
+
   const parsed = ResendConfirmationSchema.safeParse({
     email: getValue(formData, "email"),
     next: getValue(formData, "next"),
   });
-
-  const next = sanitizeNextPath(getValue(formData, "next"), DEFAULT_POST_AUTH_REDIRECT);
 
   if (!parsed.success) {
     redirectWithMessage("/logga-in", { error: getFirstIssue(parsed.error), next });
@@ -210,6 +234,10 @@ export async function resendConfirmationAction(formData: FormData): Promise<neve
 }
 
 export async function requestPasswordResetAction(formData: FormData): Promise<never> {
+  if (!isCurrentServerActionOriginValid()) {
+    redirectWithMessage("/aterstall", { error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE });
+  }
+
   const parsed = RequestResetSchema.safeParse({
     email: getValue(formData, "email"),
   });
@@ -235,6 +263,15 @@ export async function requestPasswordResetAction(formData: FormData): Promise<ne
 export async function updatePasswordAction(formData: FormData): Promise<never> {
   const rawNext = getValue(formData, "next");
   const next = sanitizeNextPath(rawNext, DEFAULT_POST_AUTH_REDIRECT);
+
+  if (!isCurrentServerActionOriginValid()) {
+    redirectWithMessage("/aterstall", {
+      error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE,
+      mode: "update",
+      next,
+    });
+  }
+
   const parsed = UpdatePasswordSchema.safeParse({
     password: getValue(formData, "password"),
     confirmPassword: getValue(formData, "confirmPassword"),
@@ -244,6 +281,16 @@ export async function updatePasswordAction(formData: FormData): Promise<never> {
   if (!parsed.success) {
     redirectWithMessage("/aterstall", {
       error: getFirstIssue(parsed.error),
+      mode: "update",
+      next,
+    });
+  }
+
+  const breachedPasswordError = await getBreachedPasswordValidationError(parsed.data.password);
+
+  if (breachedPasswordError) {
+    redirectWithMessage("/aterstall", {
+      error: breachedPasswordError,
       mode: "update",
       next,
     });
@@ -277,6 +324,10 @@ export async function updatePasswordAction(formData: FormData): Promise<never> {
 }
 
 export async function signOutAction(): Promise<never> {
+  if (!isCurrentServerActionOriginValid()) {
+    redirect(buildPath("/logga-in", { error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE }));
+  }
+
   const supabase = createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");

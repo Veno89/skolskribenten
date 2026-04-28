@@ -48,6 +48,12 @@ describe("updateSession", () => {
     );
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(response.headers.get("content-security-policy")).toMatch(
+      /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/,
+    );
+    expect(response.headers.get("content-security-policy")).not.toContain(
+      "script-src 'self' 'unsafe-inline'",
+    );
     expect(response.headers.get("content-security-policy-report-only")).toContain(
       "report-uri /api/csp-report",
     );

@@ -2,13 +2,11 @@ import Link from "next/link";
 import { MobileNav } from "@/components/shared/MobileNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  MONTHLY_PRO_PRICE_SEK,
-  ONE_TIME_PASS_DURATION_DAYS,
-  ONE_TIME_PASS_PRICE_SEK,
-  PAID_TRANSFORM_LIMIT,
-} from "@/lib/billing/entitlements";
+import { PAID_TRANSFORM_LIMIT } from "@/lib/billing/entitlements";
+import { getBillingPricingConfig } from "@/lib/billing/pricing";
 import { TEMPLATE_DETAILS } from "@/lib/drafting/template-content";
+
+export const dynamic = "force-dynamic";
 
 const steps = [
   {
@@ -51,6 +49,8 @@ const transparencyPoints = [
 ] as const;
 
 export default function LandingPage(): JSX.Element {
+  const pricing = getBillingPricingConfig();
+
   return (
     <main id="main-content" className="overflow-hidden bg-[var(--ss-neutral-50)] text-[var(--ss-neutral-900)]">
       <div className="absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(circle_at_top,rgba(74,127,165,0.18),transparent_55%)]" />
@@ -270,7 +270,7 @@ export default function LandingPage(): JSX.Element {
               <article className="bg-white px-8 py-10">
                 <p className="text-sm uppercase tracking-[0.24em] text-[var(--ss-primary)]">Pro</p>
                 <h3 className="mt-4 text-2xl font-semibold">
-                  Pro — {PAID_TRANSFORM_LIMIT} omvandlingar per månad, {MONTHLY_PRO_PRICE_SEK} kr/mån
+                  Pro — {PAID_TRANSFORM_LIMIT} omvandlingar per månad, {pricing.monthlyProPriceSek} kr/mån
                 </h3>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground">
                   Ingen bindningstid. Avsluta när som helst.
@@ -282,8 +282,8 @@ export default function LandingPage(): JSX.Element {
               <article className="bg-[var(--ss-neutral-50)] px-8 py-10">
                 <p className="text-sm uppercase tracking-[0.24em] text-[var(--ss-primary)]">30-dagarskort</p>
                 <h3 className="mt-4 text-2xl font-semibold">
-                  {ONE_TIME_PASS_DURATION_DAYS}-dagarskort — {PAID_TRANSFORM_LIMIT} omvandlingar per
-                  månad i {ONE_TIME_PASS_DURATION_DAYS} dagar, {ONE_TIME_PASS_PRICE_SEK} kr
+                  {pricing.oneTimePassDurationDays}-dagarskort — {PAID_TRANSFORM_LIMIT} omvandlingar per
+                  månad i {pricing.oneTimePassDurationDays} dagar, {pricing.oneTimePassPriceSek} kr
                 </h3>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground">Förnyas inte automatiskt.</p>
                 <Button asChild variant="secondary" className="mt-8 rounded-full px-6">

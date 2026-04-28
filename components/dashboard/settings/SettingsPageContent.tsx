@@ -93,7 +93,7 @@ function ChoiceFieldset(props: {
             <label
               key={option.label}
               className={cn(
-                "cursor-pointer rounded-[1.5rem] border px-5 py-4 transition-colors",
+                "cursor-pointer rounded-[1.5rem] border px-5 py-4 transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--ss-primary)] focus-within:ring-offset-2",
                 isActive
                   ? accentClassName
                   : "border-[var(--ss-neutral-100)] bg-[var(--ss-neutral-50)] hover:bg-white",
@@ -125,6 +125,7 @@ export function SettingsPageContent(props: SettingsPageContentProps): JSX.Elemen
   const userSettings = parseUserSettings(profile.user_settings);
   const schoolLevelValue = userSettings.schoolLevel ?? "";
   const preferredToneValue = userSettings.preferredTone ?? "";
+  const safeCapitalizedWordsValue = (userSettings.safeCapitalizedWords ?? []).join("\n");
 
   return (
     <main id="main-content" className="mx-auto min-h-screen max-w-6xl px-6 py-16 lg:px-8">
@@ -194,6 +195,26 @@ export function SettingsPageContent(props: SettingsPageContentProps): JSX.Elemen
               options={TONE_OPTIONS}
             />
 
+            <div className="space-y-2">
+              <label
+                htmlFor="safeCapitalizedWords"
+                className="text-sm font-medium text-[var(--ss-neutral-900)]"
+              >
+                Säkra versalord
+              </label>
+              <textarea
+                id="safeCapitalizedWords"
+                name="safeCapitalizedWords"
+                defaultValue={safeCapitalizedWordsValue}
+                rows={4}
+                className="w-full rounded-2xl border border-input bg-[var(--ss-neutral-50)] px-4 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder="Till exempel Skolplattformen, Teams eller skolans namn"
+              />
+              <p className="text-xs leading-6 text-muted-foreground">
+                Ett ord per rad. De här orden flaggas inte som möjliga namn i GDPR-skölden.
+              </p>
+            </div>
+
             <div className="rounded-[1.5rem] border border-[var(--ss-neutral-100)] bg-[var(--ss-neutral-50)] p-5 text-sm leading-7 text-[var(--ss-neutral-800)]">
               De här inställningarna påverkar bara formulering, tydlighetsnivå och ton i AI-utkasten.
               Själva anteckningarna scrubbas fortfarande i webbläsaren innan något skickas vidare.
@@ -240,6 +261,14 @@ export function SettingsPageContent(props: SettingsPageContentProps): JSX.Elemen
                 <dt className="text-muted-foreground">Ton</dt>
                 <dd className="mt-1 font-medium text-[var(--ss-neutral-900)]">
                   {userSettings.preferredTone ? TONE_LABELS[userSettings.preferredTone] : "Standard"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Säkra versalord</dt>
+                <dd className="mt-1 font-medium text-[var(--ss-neutral-900)]">
+                  {userSettings.safeCapitalizedWords?.length
+                    ? userSettings.safeCapitalizedWords.join(", ")
+                    : "Inga extra"}
                 </dd>
               </div>
             </dl>

@@ -52,6 +52,9 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
   const activePreferences = [
     userSettings.schoolLevel ? `Årskurs ${SCHOOL_LEVEL_LABELS[userSettings.schoolLevel]}` : null,
     userSettings.preferredTone ? TONE_LABELS[userSettings.preferredTone] : null,
+    userSettings.safeCapitalizedWords?.length
+      ? `${userSettings.safeCapitalizedWords.length} säkra versalord`
+      : null,
   ].filter((value): value is string => Boolean(value));
   const selectedTemplateInfo = TEMPLATE_DETAILS[selectedTemplate];
   const quotaExceeded = hasExceededTransformLimit(userProfile);
@@ -80,6 +83,7 @@ export function DraftingStation({ userProfile }: Props): JSX.Element {
     await generateDocument({
       customNames,
       rawInput,
+      safeCapitalizedWords: userSettings.safeCapitalizedWords,
       templateType: selectedTemplate,
     });
   };

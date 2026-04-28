@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PlanningWorkspace } from "@/components/planning/PlanningWorkspace";
+import { PlanningWorkspaceLoader } from "@/components/planning/PlanningWorkspaceLoader";
 import { getAuthoritativeEntitlementDecision } from "@/lib/billing/entitlements";
 import { loadDashboardProfile } from "@/lib/dashboard/load-dashboard-profile";
 import { createClient } from "@/lib/supabase/server";
@@ -19,5 +19,5 @@ export default async function LektionsplaneringPage(): Promise<JSX.Element> {
     .maybeSingle();
   const cloudSyncEnabled = getAuthoritativeEntitlementDecision(entitlement).active;
 
-  return <PlanningWorkspace userId={profile!.id} cloudSyncEnabled={cloudSyncEnabled} />;
+  return <PlanningWorkspaceLoader userId={profile!.id} cloudSyncEnabled={cloudSyncEnabled} />;
 }

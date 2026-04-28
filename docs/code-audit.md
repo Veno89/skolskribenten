@@ -233,13 +233,23 @@ Phase 3 notes:
 
 Longer-term improvements for production maturity.
 
-- [ ] **Strengthen CSP** — move to nonce/hash enforcement, remove `'unsafe-inline'` for scripts
-- [ ] **Add CSRF protection** — validate `Origin` header on server actions
-- [ ] **Add breached-password checking** — integrate zxcvbn or HaveIBeenPwned API
-- [ ] **Pricing flexibility** — move prices to env/config so changes don't require deploys
-- [ ] **Full accessibility audit** — screen reader testing, focus management, colour contrast, keyboard navigation
-- [ ] **Add `SAFE_CAPITALIZED_WORDS` extensibility** — allow per-school or per-user safe word lists
-- [ ] **Performance audit** — bundle size analysis, lazy-load the planning workspace, code-split admin routes
+- [x] **Strengthen CSP** — move to nonce/hash enforcement, remove `'unsafe-inline'` for scripts
+- [x] **Add CSRF protection** — validate `Origin` header on server actions
+- [x] **Add breached-password checking** — integrate zxcvbn or HaveIBeenPwned API
+- [x] **Pricing flexibility** — move prices to env/config so changes don't require deploys
+- [x] **Full accessibility audit** — screen reader testing, focus management, colour contrast, keyboard navigation
+- [x] **Add `SAFE_CAPITALIZED_WORDS` extensibility** — allow per-school or per-user safe word lists
+- [x] **Performance audit** — bundle size analysis, lazy-load the planning workspace, code-split admin routes
+
+Phase 4 notes:
+
+- CSP now uses a per-request nonce with `strict-dynamic` and no script `unsafe-inline`; the Turnstile script receives the nonce from middleware.
+- Server actions validate the request `Origin` against forwarded host/app URL before mutating auth, settings, or support-admin state.
+- Password creation/update now requires a symbol and checks the HaveIBeenPwned Pwned Passwords k-anonymity range API with padded responses; set `HIBP_PASSWORD_CHECK_DISABLED=true` only for isolated environments.
+- Billing display/projection pricing is read from `BILLING_MONTHLY_PRO_PRICE_SEK`, `BILLING_ONE_TIME_PASS_PRICE_SEK`, and `BILLING_ONE_TIME_PASS_DURATION_DAYS`; the landing page is dynamic so pricing config can change without a code deploy.
+- Per-user safe capitalized words are stored in profile settings and used by the client and server GDPR scrubbers.
+- Accessibility and performance audit notes live in `docs/accessibility-audit.md` and `docs/performance-audit.md`; Playwright now includes a public accessibility smoke test.
+- `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm exec playwright test e2e/accessibility.spec.ts` passed on April 28, 2026.
 
 ---
 

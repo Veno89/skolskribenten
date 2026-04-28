@@ -12,10 +12,12 @@ export interface ScrubberResult {
 
 export interface ScrubberOptions {
   customNames?: string[];
+  safeCapitalizedWords?: string[];
 }
 
 interface CollectUnmatchedCapitalizedOptions {
   ignoreSentenceInitialWords?: boolean;
+  safeCapitalizedWords?: string[];
 }
 
 const SAFE_CAPITALIZED_WORDS = new Set([
@@ -140,7 +142,9 @@ export class GdprScrubber {
 
     processed = this.replaceDetectedNames(
       processed,
-      collectLikelyUnknownNameWords(processed),
+      collectLikelyUnknownNameWords(processed, {
+        safeCapitalizedWords: options.safeCapitalizedWords,
+      }),
       replacements,
       replacedEntityKeys,
     );
@@ -148,7 +152,9 @@ export class GdprScrubber {
     return {
       scrubbedText: processed,
       replacements,
-      unmatchedCapitalized: collectUnmatchedCapitalizedWords(processed),
+      unmatchedCapitalized: collectUnmatchedCapitalizedWords(processed, {
+        safeCapitalizedWords: options.safeCapitalizedWords,
+      }),
       stats: {
         namesReplaced: replacedEntityKeys.size,
         piiTokensReplaced,
@@ -218,10 +224,11 @@ export function collectUnmatchedCapitalizedWords(
   options: CollectUnmatchedCapitalizedOptions = {},
 ): string[] {
   const ignoreSentenceInitialWords = options.ignoreSentenceInitialWords ?? true;
+  const safeCapitalizedWords = buildSafeCapitalizedWordSet(options.safeCapitalizedWords);
   const words = getCapitalizedWordMatches(text);
 
   const unmatched = words.filter(({ word, index }) => {
-    if (isIgnoredCapitalizedWord(text, word, index)) {
+    if (isIgnoredCapitalizedWord(text, word, index, safeCapitalizedWords)) {
       return false;
     }
 
@@ -235,11 +242,15 @@ export function collectUnmatchedCapitalizedWords(
   return Array.from(new Set(unmatched.map(({ word }) => word)));
 }
 
-export function collectLikelyUnknownNameWords(text: string): string[] {
+export function collectLikelyUnknownNameWords(
+  text: string,
+  options: { safeCapitalizedWords?: string[] } = {},
+): string[] {
   const groupedMatches = new Map<string, Array<{ index: number; word: string }>>();
+  const safeCapitalizedWords = buildSafeCapitalizedWordSet(options.safeCapitalizedWords);
 
   for (const match of getCapitalizedWordMatches(text)) {
-    if (isIgnoredCapitalizedWord(text, match.word, match.index)) {
+    if (isIgnoredCapitalizedWord(text, match.word, match.index, safeCapitalizedWords)) {
       continue;
     }
 
@@ -265,8 +276,27 @@ function getCapitalizedWordMatches(text: string): Array<{ index: number; word: s
   }));
 }
 
-function isIgnoredCapitalizedWord(text: string, word: string, index: number): boolean {
-  if (SAFE_CAPITALIZED_WORDS.has(word)) {
+function buildSafeCapitalizedWordSet(extraWords: string[] | undefined): Set<string> {
+  const safeWords = new Set(SAFE_CAPITALIZED_WORDS);
+
+  for (const word of extraWords ?? []) {
+    const trimmed = word.trim();
+
+    if (trimmed) {
+      safeWords.add(trimmed);
+    }
+  }
+
+  return safeWords;
+}
+
+function isIgnoredCapitalizedWord(
+  text: string,
+  word: string,
+  index: number,
+  safeWords: Set<string>,
+): boolean {
+  if (safeWords.has(word)) {
     return true;
   }
 

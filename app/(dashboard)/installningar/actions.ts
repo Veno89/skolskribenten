@@ -7,6 +7,10 @@ import { buildPath } from "@/lib/auth/redirects";
 import { getAppUrl } from "@/lib/supabase/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  isCurrentServerActionOriginValid,
+  SERVER_ACTION_ORIGIN_ERROR_MESSAGE,
+} from "@/lib/security/server-action-origin";
 import { getFirstIssue, getValue } from "@/lib/validations/helpers";
 import {
   UpdateProfileSettingsSchema,
@@ -19,7 +23,15 @@ const DeleteAccountRequestSchema = z.object({
   reason: z.string().trim().max(1000, "Beskrivningen är för lång.").optional(),
 });
 
+function rejectInvalidSettingsOrigin(): void {
+  if (!isCurrentServerActionOriginValid()) {
+    redirect(buildPath("/installningar", { error: SERVER_ACTION_ORIGIN_ERROR_MESSAGE }));
+  }
+}
+
 export async function updateSettingsAction(formData: FormData): Promise<void> {
+  rejectInvalidSettingsOrigin();
+
   const supabase = createClient();
   const {
     data: { user },
@@ -34,6 +46,7 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
     schoolName: formData.get("schoolName"),
     schoolLevel: formData.get("schoolLevel"),
     preferredTone: formData.get("preferredTone"),
+    safeCapitalizedWords: formData.get("safeCapitalizedWords"),
   });
 
   if (!parsed.success) {
@@ -44,13 +57,13 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
     );
   }
 
-  const { fullName, schoolName, schoolLevel, preferredTone } = parsed.data;
+  const { fullName, schoolName, schoolLevel, preferredTone, safeCapitalizedWords } = parsed.data;
   const { data: updatedProfile, error } = await supabase
     .from("profiles")
     .update({
       full_name: fullName,
       school_name: schoolName ?? null,
-      user_settings: buildUserSettings({ schoolLevel, preferredTone }),
+      user_settings: buildUserSettings({ schoolLevel, preferredTone, safeCapitalizedWords }),
     })
     .eq("id", user.id)
     .select("id")
@@ -76,6 +89,8 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
 }
 
 export async function updateEmailAction(formData: FormData): Promise<void> {
+  rejectInvalidSettingsOrigin();
+
   const supabase = createClient();
   const {
     data: { user },
@@ -120,6 +135,8 @@ export async function updateEmailAction(formData: FormData): Promise<void> {
 }
 
 export async function requestAccountDeletionAction(formData: FormData): Promise<void> {
+  rejectInvalidSettingsOrigin();
+
   const supabase = createClient();
   const {
     data: { user },

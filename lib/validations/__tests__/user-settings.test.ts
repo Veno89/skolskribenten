@@ -12,6 +12,7 @@ describe("UpdateProfileSettingsSchema", () => {
       schoolName: "  ",
       schoolLevel: "",
       preferredTone: "warm",
+      safeCapitalizedWords: " Skolplattformen\nTeams\nTeams ",
     });
 
     expect(result).toEqual({
@@ -19,6 +20,7 @@ describe("UpdateProfileSettingsSchema", () => {
       schoolName: undefined,
       schoolLevel: undefined,
       preferredTone: "warm",
+      safeCapitalizedWords: ["Skolplattformen", "Teams"],
     });
   });
 
@@ -44,12 +46,26 @@ describe("parseUserSettings", () => {
       parseUserSettings({
         schoolLevel: "7-9",
         preferredTone: "formal",
+        safeCapitalizedWords: ["Skolplattformen"],
         extra: "ignored",
       }),
     ).toEqual({
       schoolLevel: "7-9",
       preferredTone: "formal",
+      safeCapitalizedWords: ["Skolplattformen"],
     });
+  });
+
+  it("rejects malformed safe capitalized words", () => {
+    expect(
+      UpdateProfileSettingsSchema.safeParse({
+        fullName: "Ada Larsson",
+        schoolName: "",
+        schoolLevel: "",
+        preferredTone: "",
+        safeCapitalizedWords: "inteVersal",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -59,6 +75,7 @@ describe("buildUserSettings", () => {
       buildUserSettings({
         schoolLevel: "4-6",
         preferredTone: undefined,
+        safeCapitalizedWords: undefined,
       }),
     ).toEqual({
       schoolLevel: "4-6",

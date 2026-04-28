@@ -2,19 +2,16 @@
 
 import { startTransition, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  MONTHLY_PRO_PRICE_SEK,
-  ONE_TIME_PASS_DURATION_DAYS,
-  ONE_TIME_PASS_PRICE_SEK,
-  PAID_TRANSFORM_LIMIT,
-} from "@/lib/billing/entitlements";
+import { PAID_TRANSFORM_LIMIT } from "@/lib/billing/entitlements";
+import type { BillingPricingConfig } from "@/lib/billing/pricing-config";
 
 interface Props {
   isPro: boolean;
   isRecurringPlan: boolean;
+  pricing: BillingPricingConfig;
 }
 
-export function KontoBillingActions({ isPro, isRecurringPlan }: Props): JSX.Element {
+export function KontoBillingActions({ isPro, isRecurringPlan, pricing }: Props): JSX.Element {
   const [activeCheckout, setActiveCheckout] = useState<"monthly" | "onetime" | null>(null);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -108,7 +105,7 @@ export function KontoBillingActions({ isPro, isRecurringPlan }: Props): JSX.Elem
             Månadsabonnemang
           </p>
           <h2 className="mt-4 text-2xl font-semibold text-[var(--ss-neutral-900)]">
-            Pro - {PAID_TRANSFORM_LIMIT} omvandlingar per månad, {MONTHLY_PRO_PRICE_SEK} kr/mån
+            Pro - {PAID_TRANSFORM_LIMIT} omvandlingar per månad, {pricing.monthlyProPriceSek} kr/mån
           </h2>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">
             Ingen bindningstid. Avsluta när som helst i kundportalen.
@@ -134,8 +131,8 @@ export function KontoBillingActions({ isPro, isRecurringPlan }: Props): JSX.Elem
         <article className="ss-card p-8">
           <p className="text-sm uppercase tracking-[0.24em] text-[var(--ss-primary)]">Engångsköp</p>
           <h2 className="mt-4 text-2xl font-semibold text-[var(--ss-neutral-900)]">
-            {ONE_TIME_PASS_DURATION_DAYS}-dagarskort - {PAID_TRANSFORM_LIMIT} omvandlingar per månad i{" "}
-            {ONE_TIME_PASS_DURATION_DAYS} dagar, {ONE_TIME_PASS_PRICE_SEK} kr
+            {pricing.oneTimePassDurationDays}-dagarskort - {PAID_TRANSFORM_LIMIT} omvandlingar per månad i{" "}
+            {pricing.oneTimePassDurationDays} dagar, {pricing.oneTimePassPriceSek} kr
           </h2>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">Förnyas inte automatiskt.</p>
           <Button
@@ -149,7 +146,7 @@ export function KontoBillingActions({ isPro, isRecurringPlan }: Props): JSX.Elem
               ? "Startar betalning..."
               : isPro
                 ? "Pro redan aktivt"
-                : "Välj 30-dagarskort"}
+                : `Välj ${pricing.oneTimePassDurationDays}-dagarskort`}
           </Button>
         </article>
       </section>

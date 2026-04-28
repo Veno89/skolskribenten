@@ -170,6 +170,20 @@ describe("GdprScrubber", () => {
     expect(result.unmatchedCapitalized).toEqual([]);
   });
 
+  it("allows user-provided safe capitalized words", () => {
+    const result = new GdprScrubber().scrub(
+      "Skolplattformen fungerade. Vi använde Skolplattformen igen.",
+      {
+        safeCapitalizedWords: ["Skolplattformen"],
+      },
+    );
+
+    expect(result.scrubbedText).toBe(
+      "Skolplattformen fungerade. Vi använde Skolplattformen igen.",
+    );
+    expect(result.unmatchedCapitalized).toEqual([]);
+  });
+
   it("handles empty string input without throwing", () => {
     const result = new GdprScrubber().scrub("");
 

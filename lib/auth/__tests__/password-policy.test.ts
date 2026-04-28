@@ -6,9 +6,9 @@ import {
 
 describe("PasswordSchema", () => {
   it("accepts passwords that meet the strengthened baseline", () => {
-    const parsed = PasswordSchema.parse("StarkarePass123");
+    const parsed = PasswordSchema.parse("StarkarePass123!");
 
-    expect(parsed).toBe("StarkarePass123");
+    expect(parsed).toBe("StarkarePass123!");
   });
 
   it("rejects passwords that are too short", () => {
@@ -21,8 +21,8 @@ describe("PasswordSchema", () => {
     expect(parsed.error.issues[0]?.message).toBe(PASSWORD_REQUIREMENTS_MESSAGE);
   });
 
-  it("rejects passwords that do not include lowercase, uppercase, and digits", () => {
-    const parsed = PasswordSchema.safeParse("baraenlangfrasutan123");
+  it("rejects passwords that do not include lowercase, uppercase, digits, and symbols", () => {
+    const parsed = PasswordSchema.safeParse("Baraenlangfras123");
 
     expect(parsed.success).toBe(false);
     if (parsed.success) {
